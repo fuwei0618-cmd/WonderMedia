@@ -268,3 +268,5 @@ details[open].card summary:after{content:"－"}
 .ed{display:grid;grid-template-columns:1fr 64px auto;gap:6px;align-items:center;margin-top:6px}
 .ed input{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--paper);min-width:0}
 .banner .btn{white-space:nowrap;flex:0 0 auto}
+button.addclip{background:transparent;font-family:inherit}
+.addclip.on{border-style:solid;border-color:var(--accent);color:var(--ink);background:color-mix(in srgb,var(--accent) 20%,transparent)}

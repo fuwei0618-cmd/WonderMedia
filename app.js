@@ -73,12 +73,18 @@ function touch(pid) { if (pid && DATA.projects[pid]) DATA.projects[pid]._u = Dat
 function saveBlocks(type, shots) { DATA.docs.blocks = DATA.docs.blocks || { _u: 0 }; DATA.docs.blocks[type] = { shots: shots.map(s => ({ n: s.n, h: s.h, sec: s.sec })) }; DATA.docs.blocks._u = Date.now(); DIRTY = true; writeCache(); scheduleSync(); }
 
 /* ---------- 影片先存在手機（IndexedDB），有網路再上傳 ---------- */
-const IDB = {
+const MEM = new Map(); let IDB_OK = true;
+const IDB0 = {
   db: null,
-  open() { if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { const r = indexedDB.open("wondermedia", 1); r.onupgradeneeded = () => r.result.createObjectStore("media"); r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error); }); },
+  open() { if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { setTimeout(() => rej(new Error("timeout")), 3000); const r = indexedDB.open("wondermedia", 1); r.onupgradeneeded = () => r.result.createObjectStore("media"); r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error); }); },
   async put(k, v) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction("media", "readwrite"); t.objectStore("media").put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); },
   async get(k) { const db = await this.open(); return new Promise((res, rej) => { const r = db.transaction("media").objectStore("media").get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
   async del(k) { const db = await this.open(); return new Promise(res => { const t = db.transaction("media", "readwrite"); t.objectStore("media").delete(k); t.oncomplete = res; t.onerror = res; }); }
+};
+const IDB = {
+  async put(k, v) { if (IDB_OK) { try { return await IDB0.put(k, v); } catch (e) { IDB_OK = false; toast("這個瀏覽器不能把影片存在手機，請從主畫面的 WonderMedia 開啟並登入"); } } MEM.set(k, v); },
+  async get(k) { if (MEM.has(k)) return MEM.get(k); if (!IDB_OK) return undefined; try { return await IDB0.get(k); } catch (e) { return undefined; } },
+  async del(k) { MEM.delete(k); if (IDB_OK) { try { await IDB0.del(k); } catch (e) {} } }
 };
 const extOf = (f, type) => { const m = /\.([a-z0-9]{2,5})$/i.exec(f && f.name || ""); if (m) return m[1].toLowerCase(); return /quicktime/.test(type) ? "mov" : /mp4/.test(type) ? (/audio/.test(type) ? "m4a" : "mp4") : /webm/.test(type) ? "webm" : /jpeg/.test(type) ? "jpg" : /png/.test(type) ? "png" : "bin"; };
 
@@ -204,6 +210,7 @@ function tabsHTML() {
     <button data-go="blocks" aria-current="${cur === "blocks"}">${ICON.blocks}積木</button>
     <button data-go="set" aria-current="${cur === "set"}">${ICON.set}設定</button>`;
 }
+function laughCount(pl) { return (pl.laughs || []).length + pl.shots.reduce((a, s) => a + (s.laughs || []).length, 0); }
 function progress(pl) { const n = pl.shots.length, d = pl.shots.filter(s => s.done || s.clips.length).length; return { n, d }; }
 function homeHTML() {
   const ps = Object.entries(DATA.projects).map(([id, p]) => ({ id, ...p })).sort((a, b) => ((b.days[0] || {}).date || "").localeCompare((a.days[0] || {}).date || ""));
@@ -227,7 +234,7 @@ function projectHTML() {
     <div class="insert"><button data-act="addplace">＋ 插入地點</button></div>
     ${pls.length ? pls.map(pl => { const b = blocks()[pl.type] || BUILTIN.free, pr = progress(pl);
       return `<div class="item ${b.cls}" data-go="p/${view.pid}/${di}/${pl.id}" style="cursor:pointer"><time>${esc(pl.time || "—")}</time><div><div class="t"><span>${esc(pl.name)}</span><span class="muted">›</span></div>
-        <div class="meta"><span class="chip type">${esc(b.name)}</span>${pr.n ? `<span class="chip">鏡頭 ${pr.d}/${pr.n}</span>` : ""}${pl.laughs.length ? `<span class="chip">⭐ ${pl.laughs.length}</span>` : ""}${pl.notes.length ? `<span class="chip">📝 ${pl.notes.length}</span>` : ""}</div></div></div>
+        <div class="meta"><span class="chip type">${esc(b.name)}</span>${pr.n ? `<span class="chip">鏡頭 ${pr.d}/${pr.n}</span>` : ""}${laughCount(pl) ? `<span class="chip">⭐ ${laughCount(pl)}</span>` : ""}${pl.notes.length ? `<span class="chip">📝 ${pl.notes.length}</span>` : ""}</div></div></div>
         <div class="insert"><button data-act="addplace">＋ 插入地點</button></div>`; }).join("") : `<div class="empty"><b>這天還沒有地點</b>按「插入地點」開始</div>`}
   </div></div></section>`;
 }
@@ -236,7 +243,8 @@ function fieldHTML(f, v) {
   if (f.kind === "opts") return `<div class="opts" data-f="${f.k}">${f.opts.map(o => `<button data-opt="${esc(o)}" class="${v === o ? "on" : ""}">${esc(o)}</button>`).join("")}</div>`;
   return `<input data-f="${f.k}" ${f.kind === "num" ? 'inputmode="numeric"' : ""} value="${esc(v || "")}" placeholder="${f.kind === "num" ? "0" : ""}">`;
 }
-function clipChip(c) { const st = c.od ? "up" : (c.pct != null ? "wait" : "wait"); const lab = c.od ? "✓ 已上傳" : c.pct != null ? c.pct + "%" : signedIn() ? "等待上傳" : "存在手機"; return `<span class="clip ${st}" title="${esc(c.name)}">🎬 ${lab}<button class="icon-btn" style="width:20px;height:20px" data-rmclip="${c.key}" aria-label="移除">×</button></span>`; }
+const KIND_ICON = { video: "🎬", audio: "🎙️", photo: "📷" };
+function clipChip(c) { const st = c.od ? "up" : "wait"; const lab = c.od ? "✓ 已上傳" : c.pct != null ? c.pct + "%" : signedIn() ? "等待上傳" : "存在手機"; return `<span class="clip ${st}" title="${esc(c.name)}">${KIND_ICON[c.kind] || "🎬"} ${lab}<button class="icon-btn" style="width:20px;height:20px" data-rmclip="${c.key}" aria-label="移除">×</button></span>`; }
 function placeHTML() {
   const p = DATA.projects[view.pid], d = p.days[view.day], pl = d.places.find(x => x.id === view.place);
   if (!pl) { go("p/" + view.pid + "/" + view.day); return ""; }
@@ -248,11 +256,11 @@ function placeHTML() {
   </div></section>
   <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
-      <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}<label class="addclip">＋ 影片<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label></div></div>
+      <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}
+      <div class="clips"><label class="addclip">🎬 影片<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
-    <button class="laugh" data-act="laugh">⭐ 標記笑點${pl.laughs.length ? `（已標 ${pl.laughs.length} 個）` : ""}</button>
-    <p class="hint">拍到好笑的瞬間按一下，Claude 剪片時會把那附近的畫面留下來、加料。</p></section>
+    <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
   <section class="section"><header><h2>🎙️ 隨手記</h2><button class="btn sm primary" data-act="note">＋ 記一則</button></header>
     <div class="card">${pl.notes.length ? pl.notes.map(n => `<div class="note"><time>${new Date(n.ts).toTimeString().slice(0, 5)}</time>${n.text ? `<p>${esc(n.text)}</p>` : ""}<div class="clips">${(n.media || []).map(c => `<span class="clip ${c.od ? "up" : "wait"}">${c.kind === "audio" ? "🎙️" : c.kind === "photo" ? "📷" : "🎬"} ${c.od ? "已上傳" : "未上傳"}</span>`).join("")}</div></div>`).join("") : `<p class="hint">吃完對手機講一分鐘心得最好用：Claude 會用你自己的話寫配音腳本。</p>`}</div></section>
   <section class="section"><div class="card"><b>拍完了？</b><p class="hint" style="margin:4px 0 10px">按下面複製一句話，貼到 Claude 的「自媒體大神工具」對話就會開始剪。</p>
@@ -324,29 +332,10 @@ function editShots() {
 
 /* 記一則：照片／影片／錄音（同步轉文字）／文字 */
 function pickMime() { if (!window.MediaRecorder) return ""; for (const m of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return ""; }
-function openNote(quick) {
-  let pid = view.pid, di = view.day, plid = view.place;
-  if (quick || !pid || !plid) {
-    const today = todayISO(); let best = null;
-    for (const id in DATA.projects) DATA.projects[id].days.forEach((d, i) => { if (d.date === today && d.places.length) best = { id, i, pl: [...d.places].sort((a, b) => (a.time || "").localeCompare(b.time || "")).filter(x => !x.time || x.time <= nowHM()).pop() || d.places[0] }; });
-    if (!best && pid && DATA.projects[pid]) { const d = DATA.projects[pid].days[di]; if (d && d.places[0]) best = { id: pid, i: di, pl: d.places[0] }; }
-    if (!best) { const first = Object.keys(DATA.projects)[0]; const d = first && DATA.projects[first].days[0]; if (d && d.places[0]) best = { id: first, i: 0, pl: d.places[0] }; }
-    if (!best) { toast("先建一個企劃和地點"); return; }
-    pid = best.id; di = best.i; plid = best.pl.id;
-  }
-  const media = []; let rec = null, stream = null, chunks = [], sr = null, timerId = null, t0 = 0;
-  const p = DATA.projects[pid], pl = p.days[di].places.find(x => x.id === plid);
-  const list = () => media.map((m, i) => `<span class="chip x">${m.kind === "photo" ? "📷 照片" : m.kind === "video" ? "🎬 影片" : "🎙️ 錄音"}<button data-rm="${i}" aria-label="移除">×</button></span>`).join("");
-  const sc = sheet(`<h2>記一則</h2><p class="hint" style="margin:0">${esc(p.title)}・D${di + 1}・${esc(pl.name)}</p>
-    <div class="pickers"><label class="pick">📷 照片<input id="nphoto" type="file" accept="image/*" multiple class="vh"></label><label class="pick">🎬 影片<input id="nvideo" type="file" accept="video/*" multiple class="vh"></label></div>
-    <div class="row" id="mlist"></div>
-    <div><button class="recbig" id="recbtn" aria-label="開始錄音">錄音</button><div class="timer" id="timer">00:00</div><p class="hint" id="rhint" style="text-align:center">按一下開始、再按一下停止，講話會同步轉成文字</p></div>
-    <div class="field"><label for="ntext">文字</label><textarea id="ntext" placeholder="也可以按鍵盤上的麥克風口述"></textarea></div>
-    <button class="btn primary wide" id="nsave">儲存</button>`, stopAll);
-  const ta = $("#ntext", sc), btn = $("#recbtn", sc), timer = $("#timer", sc), hint = $("#rhint", sc), refresh = () => { $("#mlist", sc).innerHTML = list(); };
-  $("#nphoto", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "photo", file: f }); e.target.value = ""; refresh(); };
-  $("#nvideo", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "video", file: f }); e.target.value = ""; refresh(); };
-  $("#mlist", sc).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { media.splice(+b.dataset.rm, 1); refresh(); } };
+function recorderHTML() { return `<div><button class="recbig" id="recbtn" aria-label="開始錄音">錄音</button><div class="timer" id="timer">00:00</div><p class="hint" id="rhint" style="text-align:center">按一下開始、再按一下停止，講話會同步轉成文字</p></div>`; }
+function bindRecorder(sc, ta, onAudio) {
+  let rec = null, stream = null, chunks = [], sr = null, timerId = null, t0 = 0;
+  const btn = $("#recbtn", sc), timer = $("#timer", sc), hint = $("#rhint", sc);
   function stopAll() { try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) {} try { if (sr) { sr.onend = null; sr.stop(); } } catch (e) {} if (stream) stream.getTracks().forEach(x => x.stop()); clearInterval(timerId); }
   function startSR() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) { hint.textContent = "這裡不支援即時轉文字，錄音仍會保存"; return; }
@@ -360,12 +349,52 @@ function openNote(quick) {
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { hint.textContent = "沒有麥克風權限：到 iPhone 設定 → Safari → 麥克風 允許"; return; }
     const mime = pickMime(); chunks = []; rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     rec.ondataavailable = ev => { if (ev.data && ev.data.size) chunks.push(ev.data); };
-    rec.onstop = () => { const type = rec.mimeType || mime || "audio/mp4"; media.push({ kind: "audio", file: new Blob(chunks, { type }) }); refresh(); };
+    rec.onstop = () => { const type = rec.mimeType || mime || "audio/mp4"; onAudio(new Blob(chunks, { type })); };
     rec.start(1000); t0 = Date.now(); timerId = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); timer.textContent = pad(Math.floor(s / 60)) + ":" + pad(s % 60); }, 250);
     btn.classList.add("on"); btn.textContent = "停止"; startSR();
   };
+  return { stopAll, recording: () => !!rec && rec.state === "recording" };
+}
+function openShotRecorder(shotId) {
+  const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === shotId), s = pl.shots[i]; const blobs = [];
+  let R = null;
+  const sc = sheet(`<h2>🎙️ ${pad(i + 1)} ${esc(s.n)}</h2><p class="hint" style="margin:0">${esc(pl.name)}・錄完會掛在這個鏡頭上</p>${recorderHTML()}<div class="row" id="mlist"></div>
+    <div class="field"><label for="stext">轉出來的文字（可以修改）</label><textarea id="stext"></textarea></div><button class="btn primary wide" id="ssave">儲存</button>`, () => R && R.stopAll());
+  const ta = $("#stext", sc);
+  R = bindRecorder(sc, ta, b => { blobs.push(b); $("#mlist", sc).innerHTML = blobs.map((x, k) => `<span class="chip">🎙️ 錄音 ${k + 1}</span>`).join(""); });
+  $("#ssave", sc).onclick = async () => {
+    if (R.recording()) { R.stopAll(); await new Promise(r => setTimeout(r, 600)); }
+    if (!blobs.length) { toast("還沒有錄音"); return; }
+    let k = 0; for (const b of blobs) { k++; const path = `${safeName(p.title)}/D${view.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_錄音_${stamp()}-${k}.${extOf(null, b.type)}`; const c = await addClip(view.pid, b, path, "audio"); if (k === 1) c.text = ta.value.trim(); s.clips.push(c); }
+    s.done = true; touch(view.pid); sc._close(); render(); toast("已儲存"); uploadPending();
+  };
+}
+function openNote(quick) {
+  let pid = view.pid, di = view.day, plid = view.place;
+  if (quick || !pid || !plid) {
+    const today = todayISO(); let best = null;
+    for (const id in DATA.projects) DATA.projects[id].days.forEach((d, i) => { if (d.date === today && d.places.length) best = { id, i, pl: [...d.places].sort((a, b) => (a.time || "").localeCompare(b.time || "")).filter(x => !x.time || x.time <= nowHM()).pop() || d.places[0] }; });
+    if (!best && pid && DATA.projects[pid]) { const d = DATA.projects[pid].days[di]; if (d && d.places[0]) best = { id: pid, i: di, pl: d.places[0] }; }
+    if (!best) { const first = Object.keys(DATA.projects)[0]; const d = first && DATA.projects[first].days[0]; if (d && d.places[0]) best = { id: first, i: 0, pl: d.places[0] }; }
+    if (!best) { toast("先建一個企劃和地點"); return; }
+    pid = best.id; di = best.i; plid = best.pl.id;
+  }
+  const media = []; let R = null;
+  const p = DATA.projects[pid], pl = p.days[di].places.find(x => x.id === plid);
+  const list = () => media.map((m, i) => `<span class="chip x">${m.kind === "photo" ? "📷 照片" : m.kind === "video" ? "🎬 影片" : "🎙️ 錄音"}<button data-rm="${i}" aria-label="移除">×</button></span>`).join("");
+  const sc = sheet(`<h2>記一則</h2><p class="hint" style="margin:0">${esc(p.title)}・D${di + 1}・${esc(pl.name)}</p>
+    <div class="pickers"><label class="pick">📷 照片<input id="nphoto" type="file" accept="image/*" multiple class="vh"></label><label class="pick">🎬 影片<input id="nvideo" type="file" accept="video/*" multiple class="vh"></label></div>
+    <div class="row" id="mlist"></div>
+    ${recorderHTML()}
+    <div class="field"><label for="ntext">文字</label><textarea id="ntext" placeholder="也可以按鍵盤上的麥克風口述"></textarea></div>
+    <button class="btn primary wide" id="nsave">儲存</button>`, () => R && R.stopAll());
+  const ta = $("#ntext", sc), refresh = () => { $("#mlist", sc).innerHTML = list(); };
+  R = bindRecorder(sc, ta, b => { media.push({ kind: "audio", file: b }); refresh(); });
+  $("#nphoto", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "photo", file: f }); e.target.value = ""; refresh(); };
+  $("#nvideo", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "video", file: f }); e.target.value = ""; refresh(); };
+  $("#mlist", sc).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { media.splice(+b.dataset.rm, 1); refresh(); } };
   $("#nsave", sc).onclick = async () => {
-    if (rec && rec.state === "recording") { stopAll(); await new Promise(r => setTimeout(r, 500)); }
+    if (R.recording()) { R.stopAll(); await new Promise(r => setTimeout(r, 600)); }
     const text = ta.value.trim(); if (!media.length && !text) { toast("先拍照、錄影、錄音或打幾個字"); return; }
     const n = { id: uid("n"), ts: Date.now(), text, media: [] };
     let k = 0; for (const m of media) { k++; const type = m.file.type || ""; const path = `${safeName(p.title)}/D${di + 1}_${safeName(pl.name)}_隨手記_${m.kind === "audio" ? "錄音" : m.kind === "photo" ? "照片" : "影片"}_${stamp()}-${k}.${extOf(m.file, type)}`; n.media.push(await addClip(pid, m.file, path, m.kind)); }
@@ -405,6 +434,8 @@ document.addEventListener("click", async e => {
       return;
     }
   }
+  const rb = t.closest("[data-rec]"); if (rb) return openShotRecorder(rb.dataset.rec);
+  const lb = t.closest("[data-laugh]"); if (lb) { const s = curPlace().shots.find(x => x.id === lb.dataset.laugh); s.laughs = s.laughs || []; s.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ " + s.n + " 標了笑點 " + nowHM()); }
   const star = t.closest("[data-star]"); if (star) { const k = star.parentElement.dataset.f, pl = curPlace(); pl.info[k] = pl.info[k] === +star.dataset.star ? 0 : +star.dataset.star; touch(view.pid); render(); return; }
   const opt = t.closest("[data-opt]"); if (opt) { const k = opt.parentElement.dataset.f, pl = curPlace(); pl.info[k] = pl.info[k] === opt.dataset.opt ? "" : opt.dataset.opt; touch(view.pid); render(); return; }
   const rm = t.closest("[data-rmclip]"); if (rm) {
@@ -416,7 +447,9 @@ document.addEventListener("change", async e => {
   if (t.dataset.done) { const s = curPlace().shots.find(x => x.id === t.dataset.done); s.done = t.checked; touch(view.pid); render(); return; }
   if (t.dataset.upload) {
     const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === t.dataset.upload), s = pl.shots[i];
-    let k = 0; for (const f of t.files) { k++; const path = `${safeName(p.title)}/D${view.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_${stamp()}${t.files.length > 1 ? "-" + k : ""}.${extOf(f, f.type)}`; s.clips.push(await addClip(view.pid, f, path, /image/.test(f.type) ? "photo" : "video")); }
+    if (!t.files || !t.files.length) return;
+    try { let k = 0; for (const f of t.files) { k++; const path = `${safeName(p.title)}/D${view.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_${stamp()}${t.files.length > 1 ? "-" + k : ""}.${extOf(f, f.type)}`; s.clips.push(await addClip(view.pid, f, path, /image/.test(f.type) ? "photo" : "video")); }
+    } catch (er) { toast("加不進去：" + (er && er.message || "請從主畫面的 WonderMedia 開啟")); return; }
     s.done = true; touch(view.pid); render(); toast(signedIn() ? "已加入，上傳中" : "已存在手機，登入 OneDrive 後上傳"); uploadPending(); return;
   }
   if (t.dataset.f && t.tagName === "INPUT") { curPlace().info[t.dataset.f] = t.value.trim(); touch(view.pid); }
