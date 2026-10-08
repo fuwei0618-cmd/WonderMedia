@@ -378,20 +378,24 @@ function pickVideoMime() { if (!window.MediaRecorder) return ""; for (const m of
 function openCamera(shotId) {
   const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === shotId), s = pl.shots[i];
   let stream = null, rec = null, chunks = [], facing = "environment", t0 = 0, timer = null; const takes = [];
-  const sc = sheet(`<h2>🎬 ${pad(i + 1)} ${esc(s.n)}</h2>${s.h ? `<p class="hint" style="margin:0">${esc(s.h)}</p>` : ""}
-    <div class="cam"><video id="cv" playsinline muted autoplay></video><div class="camt" id="ct">00:00</div><div class="camr" id="cres"></div></div>
-    <div class="row" style="justify-content:center;gap:18px"><button class="btn ghost" id="cflip">🔄 翻轉</button><button class="recbig" id="crec" aria-label="開始錄影">錄影</button><span class="muted" id="ctakes" style="min-width:56px">0 段</span></div>
-    <p class="hint" id="chint" style="text-align:center;margin:0">可以連拍好幾段，拍好按「儲存」就掛在這個鏡頭上</p>
-    <button class="btn primary wide" id="csave">儲存</button>`, stopAll);
+  const sc = document.createElement("div"); sc.className = "camfull";
+  sc.innerHTML = `<video id="cv" playsinline muted autoplay></video>
+    <div class="camtop"><button class="camx" id="cclose" aria-label="關閉">✕</button><div class="camname"><b>${pad(i + 1)} ${esc(s.n)}</b>${s.h ? `<small>${esc(s.h)}</small>` : ""}</div><span class="camres" id="cres"></span></div>
+    <div class="camtime" id="ct">00:00</div>
+    <p class="camhint" id="chint">直拍 9:16・可以連拍好幾段，拍好按「儲存」</p>
+    <div class="cambar"><button class="camside" id="cflip" aria-label="翻轉鏡頭">🔄</button><button class="recbig" id="crec" aria-label="開始錄影">錄影</button><button class="camside camsave" id="csave">儲存<small id="ctakes">0 段</small></button></div>`;
+  document.body.appendChild(sc); document.body.style.overflow = "hidden";
+  sc._close = () => { stopAll(); sc.remove(); document.body.style.overflow = ""; };
+  sc.querySelector("#cclose").onclick = () => { if (takes.length && !sc.dataset.c) { sc.dataset.c = 1; $("#chint", sc).textContent = "還有 " + takes.length + " 段沒儲存，再按一次 ✕ 放棄"; return; } sc._close(); };
   const btn = $("#crec", sc), hint = $("#chint", sc), vid = $("#cv", sc);
   function stopStream() { if (stream) stream.getTracks().forEach(x => x.stop()); stream = null; }
   function stopAll() { try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) {} clearInterval(timer); stopStream(); }
   async function start() {
     stopStream();
     if (!navigator.mediaDevices || !window.MediaRecorder) { hint.textContent = "這裡不能用相機，請從主畫面的 WonderMedia 開啟，或改用「相簿」"; return; }
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: true }); }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 }, resizeMode: 'none' }, audio: true }); }
     catch (e) { hint.textContent = "打不開相機：到 iPhone 設定 → Safari → 相機、麥克風 允許，或改用「相簿」"; return; }
-    vid.srcObject = stream; const st = stream.getVideoTracks()[0].getSettings(); $("#cres", sc).textContent = (st.width && st.height) ? Math.min(st.width, st.height) + "p" : "";
+    vid.srcObject = stream; const st = stream.getVideoTracks()[0].getSettings(); $("#cres", sc).textContent = (st.width && st.height) ? Math.min(st.width, st.height) + "p" : ""; vid.onloadedmetadata = () => { if (vid.videoWidth) $("#cres", sc).textContent = Math.min(vid.videoWidth, vid.videoHeight) + "p・" + (vid.videoHeight > vid.videoWidth ? "9:16" : "16:9 橫"); };
   }
   start();
   $("#cflip", sc).onclick = () => { if (rec && rec.state === "recording") return; facing = facing === "environment" ? "user" : "environment"; start(); };
