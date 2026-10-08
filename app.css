@@ -270,3 +270,8 @@ details[open].card summary:after{content:"－"}
 .banner .btn{white-space:nowrap;flex:0 0 auto}
 button.addclip{background:transparent;font-family:inherit}
 .addclip.on{border-style:solid;border-color:var(--accent);color:var(--ink);background:color-mix(in srgb,var(--accent) 20%,transparent)}
+.cam{position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:9/16;max-height:52vh;width:auto;margin:0 auto}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.camt{position:absolute;top:8px;left:0;right:0;text-align:center;color:#fff;font-family:var(--f-mono);font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.camr{position:absolute;top:8px;right:10px;color:#fff;font-size:12px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.snote{margin-top:6px;font-size:13px;background:var(--soft);border-radius:8px;padding:6px 8px;white-space:pre-wrap;cursor:pointer}

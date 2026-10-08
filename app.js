@@ -244,7 +244,7 @@ function fieldHTML(f, v) {
   return `<input data-f="${f.k}" ${f.kind === "num" ? 'inputmode="numeric"' : ""} value="${esc(v || "")}" placeholder="${f.kind === "num" ? "0" : ""}">`;
 }
 const KIND_ICON = { video: "🎬", audio: "🎙️", photo: "📷" };
-function clipChip(c) { const st = c.od ? "up" : "wait"; const lab = c.od ? "✓ 已上傳" : c.pct != null ? c.pct + "%" : signedIn() ? "等待上傳" : "存在手機"; return `<span class="clip ${st}" title="${esc(c.name)}">${KIND_ICON[c.kind] || "🎬"} ${lab}<button class="icon-btn" style="width:20px;height:20px" data-rmclip="${c.key}" aria-label="移除">×</button></span>`; }
+function clipChip(c) { const st = c.od ? "up" : "wait"; const lab = c.od ? "✓ 已上傳" : c.pct != null ? c.pct + "%" : signedIn() ? "等待上傳" : "存在手機"; return `<span class="clip ${st}" title="${esc(c.name)}" data-view="${c.key}" role="button" style="cursor:pointer">${KIND_ICON[c.kind] || "🎬"} ${lab} ▸<button class="icon-btn" style="width:20px;height:20px" data-rmclip="${c.key}" aria-label="移除">×</button></span>`; }
 function placeHTML() {
   const p = DATA.projects[view.pid], d = p.days[view.day], pl = d.places.find(x => x.id === view.place);
   if (!pl) { go("p/" + view.pid + "/" + view.day); return ""; }
@@ -256,8 +256,8 @@ function placeHTML() {
   </div></section>
   <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
-      <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}
-      <div class="clips"><label class="addclip">🎬 影片<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
+      <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
+      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
@@ -355,6 +355,63 @@ function bindRecorder(sc, ta, onAudio) {
   };
   return { stopAll, recording: () => !!rec && rec.state === "recording" };
 }
+/* 鏡頭筆記 */
+function openShotNote(shotId) {
+  const pl = curPlace(), i = pl.shots.findIndex(x => x.id === shotId), s = pl.shots[i];
+  const sc = sheet(`<h2>📝 ${pad(i + 1)} ${esc(s.n)}</h2><div class="field"><label for="snt">這個鏡頭的筆記</label><textarea id="snt" placeholder="例如：這段機器人很好笑、這裡要配音說價格、按鍵盤麥克風可以口述">${esc(s.note || "")}</textarea></div><button class="btn primary wide" id="sns">儲存</button>`);
+  $("#snt", sc).focus();
+  $("#sns", sc).onclick = () => { s.note = $("#snt", sc).value.trim(); touch(view.pid); sc._close(); render(); toast("已儲存"); };
+}
+/* 預覽已加入的影片／照片／錄音 */
+function findClip(key) { for (const pid in DATA.projects) for (const d of DATA.projects[pid].days) for (const pl of d.places) { for (const s of pl.shots) { const c = s.clips.find(x => x.key === key); if (c) return { c, label: s.n }; } for (const n of pl.notes) { const c = (n.media || []).find(x => x.key === key); if (c) return { c, label: "隨手記" }; } } return null; }
+async function viewClip(key) {
+  const f = findClip(key); if (!f) return; const c = f.c; let url = null, revoke = false;
+  const local = await IDB.get(key);
+  if (local && local.blob) { url = URL.createObjectURL(local.blob); revoke = true; }
+  else if (c.od) { try { const r = await gfetch("/me/drive/items/" + encodeURIComponent(c.od)); const j = await r.json(); url = j["@microsoft.graph.downloadUrl"]; } catch (e) { return toast(e && e.code === "auth" ? "先到設定登入 OneDrive" : "讀不到檔案，確認網路後再試"); } }
+  if (!url) return toast("這個檔案已經不在手機，也還沒上傳");
+  const media = c.kind === "photo" ? `<img src="${url}" alt="${esc(c.name)}">` : c.kind === "audio" ? `<audio src="${url}" controls autoplay style="width:100%"></audio>` : `<video src="${url}" controls playsinline autoplay></video>`;
+  sheet(`<h2>${esc(f.label)}</h2><div class="lightbox">${media}</div>${c.text ? `<p style="margin:0">🎙️ ${esc(c.text)}</p>` : ""}<p class="hint" style="margin:0;word-break:break-all">${esc(c.name)}・${c.od ? "已上傳 OneDrive" : "還在手機"}</p>`, () => { if (revoke) URL.revokeObjectURL(url); });
+}
+/* App 內建相機：1080p 錄影（iPhone 用網頁上傳鈕直接拍只有 480p） */
+function pickVideoMime() { if (!window.MediaRecorder) return ""; for (const m of ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"]) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return ""; }
+function openCamera(shotId) {
+  const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === shotId), s = pl.shots[i];
+  let stream = null, rec = null, chunks = [], facing = "environment", t0 = 0, timer = null; const takes = [];
+  const sc = sheet(`<h2>🎬 ${pad(i + 1)} ${esc(s.n)}</h2>${s.h ? `<p class="hint" style="margin:0">${esc(s.h)}</p>` : ""}
+    <div class="cam"><video id="cv" playsinline muted autoplay></video><div class="camt" id="ct">00:00</div><div class="camr" id="cres"></div></div>
+    <div class="row" style="justify-content:center;gap:18px"><button class="btn ghost" id="cflip">🔄 翻轉</button><button class="recbig" id="crec" aria-label="開始錄影">錄影</button><span class="muted" id="ctakes" style="min-width:56px">0 段</span></div>
+    <p class="hint" id="chint" style="text-align:center;margin:0">可以連拍好幾段，拍好按「儲存」就掛在這個鏡頭上</p>
+    <button class="btn primary wide" id="csave">儲存</button>`, stopAll);
+  const btn = $("#crec", sc), hint = $("#chint", sc), vid = $("#cv", sc);
+  function stopStream() { if (stream) stream.getTracks().forEach(x => x.stop()); stream = null; }
+  function stopAll() { try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) {} clearInterval(timer); stopStream(); }
+  async function start() {
+    stopStream();
+    if (!navigator.mediaDevices || !window.MediaRecorder) { hint.textContent = "這裡不能用相機，請從主畫面的 WonderMedia 開啟，或改用「相簿」"; return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: true }); }
+    catch (e) { hint.textContent = "打不開相機：到 iPhone 設定 → Safari → 相機、麥克風 允許，或改用「相簿」"; return; }
+    vid.srcObject = stream; const st = stream.getVideoTracks()[0].getSettings(); $("#cres", sc).textContent = (st.width && st.height) ? Math.min(st.width, st.height) + "p" : "";
+  }
+  start();
+  $("#cflip", sc).onclick = () => { if (rec && rec.state === "recording") return; facing = facing === "environment" ? "user" : "environment"; start(); };
+  btn.onclick = () => {
+    if (rec && rec.state === "recording") { rec.stop(); clearInterval(timer); btn.classList.remove("on"); btn.textContent = "再拍一段"; return; }
+    if (!stream) return start();
+    const mime = pickVideoMime(); chunks = [];
+    try { rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 8000000 }); } catch (e) { rec = new MediaRecorder(stream); }
+    rec.ondataavailable = ev => { if (ev.data && ev.data.size) chunks.push(ev.data); };
+    rec.onstop = () => { const type = (rec.mimeType || mime || "video/mp4").split(";")[0]; takes.push(new Blob(chunks, { type })); $("#ctakes", sc).textContent = takes.length + " 段"; };
+    rec.start(1000); t0 = Date.now(); timer = setInterval(() => { const x = Math.floor((Date.now() - t0) / 1000); $("#ct", sc).textContent = pad(Math.floor(x / 60)) + ":" + pad(x % 60); }, 250);
+    btn.classList.add("on"); btn.textContent = "停止";
+  };
+  $("#csave", sc).onclick = async () => {
+    if (rec && rec.state === "recording") { rec.stop(); clearInterval(timer); await new Promise(r => setTimeout(r, 700)); }
+    if (!takes.length) { toast("還沒有拍"); return; }
+    let k = 0; for (const b of takes) { k++; const ext = /webm/.test(b.type) ? "webm" : "mp4"; const path = `${safeName(p.title)}/D${view.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_${stamp()}${takes.length > 1 ? "-" + k : ""}.${ext}`; s.clips.push(await addClip(view.pid, b, path, "video")); }
+    s.done = true; touch(view.pid); sc._close(); render(); toast(signedIn() ? "已儲存，上傳中" : "已存在手機，登入 OneDrive 後上傳"); uploadPending();
+  };
+}
 function openShotRecorder(shotId) {
   const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === shotId), s = pl.shots[i]; const blobs = [];
   let R = null;
@@ -435,6 +492,9 @@ document.addEventListener("click", async e => {
     }
   }
   const rb = t.closest("[data-rec]"); if (rb) return openShotRecorder(rb.dataset.rec);
+  const cb = t.closest("[data-cam]"); if (cb) return openCamera(cb.dataset.cam);
+  const nb = t.closest("[data-snote]"); if (nb) return openShotNote(nb.dataset.snote);
+  const vw = t.closest("[data-view]"); if (vw && !t.closest("[data-rmclip]")) return viewClip(vw.dataset.view);
   const lb = t.closest("[data-laugh]"); if (lb) { const s = curPlace().shots.find(x => x.id === lb.dataset.laugh); s.laughs = s.laughs || []; s.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ " + s.n + " 標了笑點 " + nowHM()); }
   const star = t.closest("[data-star]"); if (star) { const k = star.parentElement.dataset.f, pl = curPlace(); pl.info[k] = pl.info[k] === +star.dataset.star ? 0 : +star.dataset.star; touch(view.pid); render(); return; }
   const opt = t.closest("[data-opt]"); if (opt) { const k = opt.parentElement.dataset.f, pl = curPlace(); pl.info[k] = pl.info[k] === opt.dataset.opt ? "" : opt.dataset.opt; touch(view.pid); render(); return; }
