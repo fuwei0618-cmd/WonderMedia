@@ -88,39 +88,24 @@ const IDB = {
 };
 const extOf = (f, type) => { const m = /\.([a-z0-9]{2,5})$/i.exec(f && f.name || ""); if (m) return m[1].toLowerCase(); return /quicktime/.test(type) ? "mov" : /mp4/.test(type) ? (/audio/.test(type) ? "m4a" : "mp4") : /webm/.test(type) ? "webm" : /jpeg/.test(type) ? "jpg" : /png/.test(type) ? "png" : "bin"; };
 
-/* ---------- Microsoft 登入（WonderMedia 自己的 App 註冊） ---------- */
-const CLIENT_ID = "cfa1e355-89cb-41bc-be5d-b4f613d948df";
-const AUTH = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
-const SCOPES = "Files.ReadWrite.AppFolder User.Read offline_access openid profile";
-const REDIRECT = location.origin + location.pathname.replace(/index\.html$/, "");
+/* ---------- Microsoft 登入：共用 Origina（Entry/sync/origina-sync.js），資料在 OneDrive › 應用程式 › Origina › WonderMedia ---------- */
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const ROOT = "";
 const DATA_FILE = ROOT + "wondermedia-data.json";
-const APPROOT = "/me/drive/special/approot:/";
-function b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
-function randStr(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); }
-function saveTok(j) { const old = ls.get("tok", {}) || {}; ls.set("tok", { access: j.access_token, refresh: j.refresh_token || old.refresh, exp: Date.now() + ((j.expires_in || 3600) - 120) * 1000 }); }
-async function login() {
-  const verifier = randStr(48), state = randStr(16); ls.set("pkce", { verifier, state });
-  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-  location.assign(AUTH + "/authorize?" + new URLSearchParams({ client_id: CLIENT_ID, response_type: "code", redirect_uri: REDIRECT, scope: SCOPES, code_challenge: challenge, code_challenge_method: "S256", state, response_mode: "query", prompt: "select_account" }));
-}
-async function tokenRequest(params) {
-  try { const r = await fetch(AUTH + "/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: CLIENT_ID, scope: SCOPES, ...params }) }); if (!r.ok) return null; const j = await r.json(); if (!j.access_token) return null; saveTok(j); return j.access_token; } catch (e) { return null; }
-}
+const APPROOT = "/me/drive/special/approot:/WonderMedia/";
+const OS = window.OriginaSync;
+const login = () => OS.login(false);
 async function handleRedirect() {
-  const p = new URLSearchParams(location.search); if (!p.has("code") && !p.has("error")) return;
-  const st = ls.get("pkce", {}) || {}; history.replaceState(null, "", REDIRECT + location.hash);
-  if (p.get("state") !== st.state) return; ls.set("pkce", null); if (p.has("error")) return;
-  await tokenRequest({ grant_type: "authorization_code", code: p.get("code"), redirect_uri: REDIRECT, code_verifier: st.verifier });
+  // 從舊資料夾（應用程式／Origina／WonderMedia）換到 Origina：舊的版本標記不能用了，下次同步整份重新上傳
+  if (ls.get("folder", "") !== "Origina") { const c = ls.get(CACHE_KEY, null); if (c) { c.eTag = null; c.dirty = true; ls.set(CACHE_KEY, c); } ls.set("tok", null); ls.set("folder", "Origina"); }
+  if (!(await OS.getToken())) await OS.ensureToken(true);
 }
-let refreshing = null;
-async function getToken() { const t = ls.get("tok", null); if (!t) return null; if (t.access && t.exp > Date.now()) return t.access; if (!t.refresh) return null; if (!refreshing) refreshing = tokenRequest({ grant_type: "refresh_token", refresh_token: t.refresh }).finally(() => { refreshing = null; }); return refreshing; }
+const getToken = () => OS.getToken();
 async function gfetch(path, opts = {}) {
-  for (let i = 0; i < 2; i++) { const tok = await getToken(); if (!tok) throw { code: "auth" }; const r = await fetch(path.startsWith("http") ? path : GRAPH + path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + tok } }); if (r.status === 401 && i === 0) { const t = ls.get("tok", {}); t.exp = 0; ls.set("tok", t); continue; } return r; }
+  for (let i = 0; i < 2; i++) { const tok = await getToken(); if (!tok) throw { code: "auth" }; const r = await fetch(path.startsWith("http") ? path : GRAPH + path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + tok } }); if (r.status === 401 && i === 0) { try { const t = JSON.parse(localStorage.getItem("lucky-token")); t.exp = 0; localStorage.setItem("lucky-token", JSON.stringify(t)); } catch (e) {} continue; } return r; }
 }
-const signedIn = () => !!ls.get("tok", null);
-function logout() { ls.set("tok", null); location.assign(AUTH + "/logout?post_logout_redirect_uri=" + encodeURIComponent(REDIRECT)); }
+const signedIn = () => { try { return !!JSON.parse(localStorage.getItem("lucky-token")); } catch (e) { return false; } };
+function logout() { localStorage.removeItem("lucky-token"); location.assign("https://login.microsoftonline.com/consumers/oauth2/v2.0/logout?post_logout_redirect_uri=" + encodeURIComponent(location.href.split(/[?#]/)[0])); }
 
 let syncChain = Promise.resolve(), syncTimer = null, SYNC = "local";
 function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 900); }
@@ -146,7 +131,7 @@ async function syncOnce() {
 addEventListener("online", () => sync());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sync(); });
 
-/* 上傳：OneDrive/應用程式/WonderMedia/<企劃>/D1_鰻天下_02_店內環境_1010-1215.mp4 */
+/* 上傳：OneDrive/應用程式/Origina/WonderMedia/<企劃>/D1_鰻天下_02_店內環境_1010-1215.mp4 */
 let uploading = false;
 function allClips() { const out = []; for (const pid in DATA.projects) { const p = DATA.projects[pid]; p.days.forEach(d => d.places.forEach(pl => { pl.shots.forEach(s => s.clips.forEach(c => out.push({ p, pid, c }))); pl.notes.forEach(n => (n.media || []).forEach(c => out.push({ p, pid, c }))); })); } return out; }
 async function uploadPending() {
@@ -277,7 +262,7 @@ function blocksHTML() {
 function settingsHTML() {
   return `<div class="top"><h1 style="font-size:20px">設定</h1></div>
   <section class="section"><h2>OneDrive</h2><div class="card stack">
-    ${signedIn() ? `<div class="banner ok"><span>已登入，影片會傳到 OneDrive／應用程式／WonderMedia</span></div><button class="btn" data-act="sync">立即同步</button><button class="btn danger" data-act="logout">登出</button>`
+    ${signedIn() ? `<div class="banner ok"><span>已登入，影片會傳到 OneDrive／應用程式／Origina／WonderMedia</span></div><button class="btn" data-act="sync">立即同步</button><button class="btn danger" data-act="logout">登出</button>`
       : `<p class="hint" style="margin:0">登入後：手機拍的影片會自動傳到 OneDrive，電腦同步下來，Claude 就能直接剪。沒登入也能用，影片先存在這支手機。</p><button class="btn primary" data-act="login">登入 OneDrive</button>`}
   </div></section>
   <section class="section"><h2>備份</h2><div class="card stack"><button class="btn" data-act="export">匯出全部紀錄（JSON）</button><p class="hint" style="margin:0">影片不在備份檔裡，影片在 OneDrive。</p></div></section>`;
