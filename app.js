@@ -235,6 +235,7 @@ function projectHTML() {
   <div class="daytabs">${p.days.map((x, i) => `<button data-go="p/${view.pid}/${i}" aria-current="${i === di}"><b>D${i + 1}</b><small>${esc(md(x.date).replace(/（.*/, ""))}</small></button>`).join("")}<button data-act="addday"><b>＋</b><small>加一天</small></button></div>
   ${syncBanner()}
   ${projFormula(p)}
+  ${scriptCard(p)}
   <div class="dayhead t-food" style="--tc:var(--muted);margin-top:10px"><div class="row"><span class="mono muted" style="font-size:13px">D${di + 1}・${esc(md(d.date))}</span><span class="chip">${esc(p.tag)}</span><span class="grow"></span><button class="icon-btn" data-act="editday" aria-label="編輯這天">✎</button></div><h1>${esc(d.title || p.title)}</h1></div>
   <p class="hint" style="margin-top:6px">每個地點選一塊場景積木，拍攝清單會自動帶出來。拍完一個鏡頭就把影片掛上去。</p>
   <section class="section"><h2>這天的地點</h2><div class="card"><div class="tl">
@@ -381,7 +382,7 @@ function bindRecorder(sc, ta, onAudio) {
     rec.ondataavailable = ev => { if (ev.data && ev.data.size) chunks.push(ev.data); };
     rec.onstop = () => { const type = rec.mimeType || mime || "audio/mp4"; onAudio(new Blob(chunks, { type })); };
     rec.start(1000); t0 = Date.now(); timerId = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); timer.textContent = pad(Math.floor(s / 60)) + ":" + pad(s % 60); }, 250);
-    btn.classList.add("on"); btn.textContent = "停止"; startSR();
+    btn.classList.add("on"); btn.textContent = "停止"; if (PM && !$("#campm", sc).hidden) { PM.reset(); PM.play(); } startSR();
   };
   return { stopAll, recording: () => !!rec && rec.state === "recording" };
 }
@@ -412,12 +413,15 @@ function openCamera(shotId) {
   sc.innerHTML = `<video id="cv" playsinline muted autoplay></video>
     <div class="camtop"><button class="camx" id="cclose" aria-label="關閉">✕</button><div class="camname"><b>${pad(i + 1)} ${esc(s.n)}</b>${s.h ? `<small>${esc(s.h)}</small>` : ""}</div><span class="camres" id="cres"></span></div>
     <div class="camtime" id="ct">00:00</div>
+    ${(p.script || "").trim() ? `<div class="campm" id="campm" hidden>${prompterHTML(p.script)}</div><button class="camside campmbtn" id="cpm" aria-label="提詞機">📜</button>` : ""}
     <p class="camhint" id="chint">直拍 9:16・可以連拍好幾段，拍好按「儲存」</p>
     <div class="cambar"><button class="camside" id="cflip" aria-label="翻轉鏡頭">🔄</button><button class="recbig" id="crec" aria-label="開始錄影">錄影</button><button class="camside camsave" id="csave">儲存<small id="ctakes">0 段</small></button></div>`;
   document.body.appendChild(sc); document.body.style.overflow = "hidden";
-  sc._close = () => { stopAll(); sc.remove(); document.body.style.overflow = ""; };
+  sc._close = () => { stopAll(); if (PM) PM.stop(); sc.remove(); document.body.style.overflow = ""; };
   sc.querySelector("#cclose").onclick = () => { if (takes.length && !sc.dataset.c) { sc.dataset.c = 1; $("#chint", sc).textContent = "還有 " + takes.length + " 段沒儲存，再按一次 ✕ 放棄"; return; } sc._close(); };
   const btn = $("#crec", sc), hint = $("#chint", sc), vid = $("#cv", sc);
+  let PM = null; const pmBtn = $("#cpm", sc);
+  if (pmBtn) pmBtn.onclick = () => { const box = $("#campm", sc); box.hidden = !box.hidden; if (!box.hidden && !PM) PM = bindPrompter(box); pmBtn.classList.toggle("on", !box.hidden); };
   function stopStream() { if (stream) stream.getTracks().forEach(x => x.stop()); stream = null; }
   function stopAll() { try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) {} clearInterval(timer); stopStream(); }
   async function start() {
@@ -430,7 +434,7 @@ function openCamera(shotId) {
   start();
   $("#cflip", sc).onclick = () => { if (rec && rec.state === "recording") return; facing = facing === "environment" ? "user" : "environment"; start(); };
   btn.onclick = () => {
-    if (rec && rec.state === "recording") { rec.stop(); clearInterval(timer); btn.classList.remove("on"); btn.textContent = "再拍一段"; return; }
+    if (rec && rec.state === "recording") { rec.stop(); clearInterval(timer); btn.classList.remove("on"); btn.textContent = "再拍一段"; if (PM) PM.pause(); return; }
     if (!stream) return start();
     const mime = pickVideoMime(); chunks = [];
     try { rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 8000000 }); } catch (e) { rec = new MediaRecorder(stream); }
@@ -674,7 +678,7 @@ function editPost(id) {
 
 
 /* ---------- 工作台五層：風格・劇本・分鏡・道具・剪法（可改，存在 DATA.docs.wb 同步 OneDrive） ---------- */
-const WB_DEFAULT = {"styles": [{"n": "實用攻略型", "core": "景點懶人包、路線地圖、避坑與花費分析", "hw": "遊覽攻略、拍照機位", "m": "Vlog 自動編排＋資訊字卡"}, {"n": "氛圍感美學／微電影", "core": "高質感畫面、微電影鏡頭感，搭配口播或旁白與音樂", "hw": "微電影氛圍", "m": "音樂卡點＋調色（你主導）"}, {"n": "第一人稱沉浸（POV）", "core": "Ray-Ban 視角、第一人稱鏡頭、原聲與步伐節奏", "hw": "", "m": "Vlog 自動編排，原聲為主、少字"}, {"n": "主觀評測／說書", "core": "面對鏡頭聊天、講旅行荒謬故事與主觀評分", "hw": "心得感想", "m": "口播剪輯（去氣口、停頓）"}, {"n": "預算／CP 值極致", "core": "平價替代景點、CP 值實測", "hw": "遊覽攻略", "m": "口播剪輯＋價格字卡"}, {"n": "靈性／療癒哲理", "core": "慢節奏、與內心對話的哲理金句與冥想感", "hw": "", "m": "慢節奏旁白＋氛圍配樂"}, {"n": "特殊主題／文化挖掘", "core": "專攻古建築、藝術展覽等深層文化", "hw": "歷史人文", "m": "知識講解（動態字幕、圖解）"}, {"n": "頂級開箱／飯店設備控", "core": "奢華飯店開箱、開箱高級設備", "hw": "", "m": "開箱結構＋口播"}, {"n": "互動問答／隨機冒險", "core": "讓粉絲投票決定行程、隨機抽籤冒險", "hw": "", "m": "口播剪輯＋投票字卡"}], "templates": [{"n": "旅行 Vlog", "flow": ["開場 Hook", "每天", "每個地點", "結尾心得"], "sty": "攻略、氛圍、POV", "blk": ["move", "play", "food", "stay"]}, {"n": "生活 Vlog", "flow": ["開場", "今天的幾件事", "碎碎念收尾"], "sty": "POV、療癒", "blk": ["free", "cook", "food"]}, {"n": "探店／美食", "flow": ["一句話評價先講", "店家", "餐點", "總評"], "sty": "評測、CP 值", "blk": ["food", "night"]}, {"n": "開箱／好物", "flow": ["為什麼買", "外觀", "實測", "優缺點"], "sty": "開箱、評測", "blk": ["free"]}, {"n": "穿搭", "flow": ["整體", "單品細節", "場合搭配"], "sty": "氛圍", "blk": ["wear"]}, {"n": "街頭表演", "flow": ["現場氛圍", "表演片段", "觀眾反應", "幕後"], "sty": "氛圍、POV", "blk": ["music"]}, {"n": "合唱團", "flow": ["練習花絮", "演出", "團員訪談"], "sty": "氛圍", "blk": ["music"]}, {"n": "Podcast", "flow": ["本集主題", "錄音", "精華切片 3 到 5 段"], "sty": "評測、療癒", "blk": ["free"]}], "steps": [{"n": "素材整理", "who": "Claude", "d": "依拍攝清單分類、挑出能用的片段"}, {"n": "腳本與標題", "who": "Claude 草擬，你定稿", "d": "Google Map 地點、吸睛標題"}, {"n": "粗剪＋地標字卡", "who": "Claude", "d": "排時間線、切掉空白和重複"}, {"n": "片頭片尾", "who": "Claude", "d": "套你的固定模板"}, {"n": "音樂＋卡點", "who": "Claude", "d": "從道具櫃挑配樂，剪接點對拍子"}, {"n": "調色", "who": "你", "d": "亮度、對比、濾鏡，套用到全部"}, {"n": "特效、貼圖、音效", "who": "Claude 先放，你微調", "d": "從道具櫃拿"}, {"n": "封面", "who": "你", "d": "Canva，一個內建兩張"}, {"n": "文字字幕", "who": "Claude 初稿，你修", "d": "文字框、字幕字體照道具櫃"}, {"n": "音樂淡出、透明度", "who": "Claude", "d": "收尾漸弱"}, {"n": "Shorts 切片", "who": "Claude", "d": "從長片切出直式短版，套上新模板"}], "methods": [{"n": "素材 → 剪映草稿", "d": "照劇本排好、放好字幕貼圖配樂，存成剪映草稿，你最後修", "fit": "全部賽道", "st": "在用"}, {"n": "口播剪輯", "d": "去氣口、停頓、重複句，自動上字幕", "fit": "評測、CP 值、問答", "st": "做得到"}, {"n": "Vlog 自動編排", "d": "隨手拍丟進來，看畫面和聲音排成故事、配音樂", "fit": "攻略、POV、生活", "st": "做得到"}, {"n": "爆款複刻／一鍵套範本", "d": "拆解一支爆款的鏡頭節奏，用你的素材照著排", "fit": "懶人套範本", "st": "要一支參考片"}, {"n": "知識動畫", "d": "動態字幕、圖解、地圖動畫", "fit": "文化挖掘、攻略", "st": "還沒試過"}]};
+const WB_DEFAULT = {"styles": [{"n": "實用攻略型", "core": "景點懶人包、路線地圖、避坑與花費分析", "hw": "遊覽攻略、拍照機位", "m": "Vlog 自動編排＋資訊字卡"}, {"n": "氛圍感美學／微電影", "core": "高質感畫面、微電影鏡頭感，搭配口播或旁白與音樂", "hw": "微電影氛圍", "m": "音樂卡點＋調色（你主導）"}, {"n": "第一人稱沉浸（POV）", "core": "Ray-Ban 視角、第一人稱鏡頭、原聲與步伐節奏", "hw": "", "m": "Vlog 自動編排，原聲為主、少字"}, {"n": "主觀評測／說書", "core": "面對鏡頭聊天、講旅行荒謬故事與主觀評分", "hw": "心得感想", "m": "口播剪輯（去氣口、停頓）"}, {"n": "預算／CP 值極致", "core": "平價替代景點、CP 值實測", "hw": "遊覽攻略", "m": "口播剪輯＋價格字卡"}, {"n": "靈性／療癒哲理", "core": "慢節奏、與內心對話的哲理金句與冥想感", "hw": "", "m": "慢節奏旁白＋氛圍配樂"}, {"n": "特殊主題／文化挖掘", "core": "專攻古建築、藝術展覽等深層文化", "hw": "歷史人文", "m": "知識講解（動態字幕、圖解）"}, {"n": "頂級開箱／飯店設備控", "core": "奢華飯店開箱、開箱高級設備", "hw": "", "m": "開箱結構＋口播"}, {"n": "互動問答／隨機冒險", "core": "讓粉絲投票決定行程、隨機抽籤冒險", "hw": "", "m": "口播剪輯＋投票字卡"}], "templates": [{"n": "口播／觀點", "flow": ["一句話開場 Hook", "為什麼想講", "三個重點", "收尾＋邀請留言"], "sty": "評測、療癒", "blk": ["free"]}, {"n": "旅行 Vlog", "flow": ["開場 Hook", "每天", "每個地點", "結尾心得"], "sty": "攻略、氛圍、POV", "blk": ["move", "play", "food", "stay"]}, {"n": "生活 Vlog", "flow": ["開場", "今天的幾件事", "碎碎念收尾"], "sty": "POV、療癒", "blk": ["free", "cook", "food"]}, {"n": "探店／美食", "flow": ["一句話評價先講", "店家", "餐點", "總評"], "sty": "評測、CP 值", "blk": ["food", "night"]}, {"n": "開箱／好物", "flow": ["為什麼買", "外觀", "實測", "優缺點"], "sty": "開箱、評測", "blk": ["free"]}, {"n": "穿搭", "flow": ["整體", "單品細節", "場合搭配"], "sty": "氛圍", "blk": ["wear"]}, {"n": "街頭表演", "flow": ["現場氛圍", "表演片段", "觀眾反應", "幕後"], "sty": "氛圍、POV", "blk": ["music"]}, {"n": "合唱團", "flow": ["練習花絮", "演出", "團員訪談"], "sty": "氛圍", "blk": ["music"]}, {"n": "Podcast", "flow": ["本集主題", "錄音", "精華切片 3 到 5 段"], "sty": "評測、療癒", "blk": ["free"]}], "steps": [{"n": "素材整理", "who": "Claude", "d": "依拍攝清單分類、挑出能用的片段"}, {"n": "腳本與標題", "who": "Claude 草擬，你定稿", "d": "Google Map 地點、吸睛標題"}, {"n": "粗剪＋地標字卡", "who": "Claude", "d": "排時間線、切掉空白和重複"}, {"n": "片頭片尾", "who": "Claude", "d": "套你的固定模板"}, {"n": "音樂＋卡點", "who": "Claude", "d": "從道具櫃挑配樂，剪接點對拍子"}, {"n": "調色", "who": "你", "d": "亮度、對比、濾鏡，套用到全部"}, {"n": "特效、貼圖、音效", "who": "Claude 先放，你微調", "d": "從道具櫃拿"}, {"n": "封面", "who": "你", "d": "Canva，一個內建兩張"}, {"n": "文字字幕", "who": "Claude 初稿，你修", "d": "文字框、字幕字體照道具櫃"}, {"n": "音樂淡出、透明度", "who": "Claude", "d": "收尾漸弱"}, {"n": "Shorts 切片", "who": "Claude", "d": "從長片切出直式短版，套上新模板"}], "methods": [{"n": "素材 → 剪映草稿", "d": "照劇本排好、放好字幕貼圖配樂，存成剪映草稿，你最後修", "fit": "全部賽道", "st": "在用"}, {"n": "口播剪輯", "d": "去氣口、停頓、重複句，自動上字幕", "fit": "評測、CP 值、問答", "st": "做得到"}, {"n": "Vlog 自動編排", "d": "隨手拍丟進來，看畫面和聲音排成故事、配音樂", "fit": "攻略、POV、生活", "st": "做得到"}, {"n": "爆款複刻／一鍵套範本", "d": "拆解一支爆款的鏡頭節奏，用你的素材照著排", "fit": "懶人套範本", "st": "要一支參考片"}, {"n": "知識動畫", "d": "動態字幕、圖解、地圖動畫", "fit": "文化挖掘、攻略", "st": "還沒試過"}]};
 function wb() { const c = DATA.docs.wb || {}; const out = {}; for (const k in WB_DEFAULT) out[k] = c[k] || WB_DEFAULT[k]; return out; }
 function saveWB(k, list) { DATA.docs.wb = { ...(DATA.docs.wb || {}), [k]: list, _u: Date.now() }; DIRTY = true; writeCache(); scheduleSync(); }
 const WBTABS = [["plan", "企劃", "home"], ["sty", "風格", "wb/sty"], ["tpl", "劇本", "wb/tpl"], ["scn", "分鏡", "blocks"], ["kit", "道具", "wb/kit"], ["cut", "剪法", "wb/cut"]];
@@ -908,6 +912,46 @@ async function fromWorld() {
   };
 }
 
+
+/* 口播腳本：企劃上存一份腳本；請 Claude 寫 → 貼回來；拍的時候當提詞機 */
+function scriptCard(p) {
+  const has = (p.script || "").trim();
+  return `<div class="card scard2"><div class="row" style="justify-content:space-between"><b>✍️ 口播腳本</b>${has ? `<span class="muted" style="font-size:12px">${has.length} 字・約 ${Math.max(1, Math.round(has.length / 4))} 秒</span>` : ""}</div>
+    ${has ? `<p class="spreview">${esc(has.slice(0, 120))}${has.length > 120 ? "…" : ""}</p>` : `<p class="hint" style="margin:4px 0 0">要講話的片（口播、開場、心得）先寫腳本，拍的時候可以當提詞機。</p>`}
+    <div class="row" style="margin-top:10px"><button class="btn sm primary" data-act="askscript">🤖 請 Claude 寫</button><button class="btn sm" data-act="editscript">✎ ${has ? "編輯" : "貼上／自己寫"}</button>${has ? `<button class="btn sm" data-act="prompter">📜 提詞機</button>` : ""}</div></div>`;
+}
+function askScript() {
+  const p = curProj();
+  const sc = form("請 Claude 寫腳本", [{ k: "notes", l: "想講的重點（隨便打，條列也行）", v: p.scriptNotes || "", ph: "例如：Origina 是什麼、為什麼做、怎麼用" }, { k: "len", l: "大概多長（秒）", type: "number", v: p.scriptLen || "60" }], v => {
+    p.scriptNotes = v.notes; p.scriptLen = v.len; touch(view.pid);
+    const t = tplOf(p), st = styleOf(p);
+    sendToClaude(`幫我寫口播腳本：${p.title}${st ? "（賽道：" + st.n + "）" : ""}${t ? "，劇本：" + t.n + "（" + t.flow.join("→") + "）" : ""}，長度約 ${v.len || 60} 秒，口語、像我平常講話。重點：${v.notes || "（我等一下補）"}。寫好我貼回 WonderMedia 的腳本欄。`);
+  });
+}
+function editScript() {
+  const p = curProj();
+  const sc = sheet(`<h2>✍️ 口播腳本</h2><p class="hint" style="margin:0">把 Claude 寫的腳本貼進來，或自己寫。空一行＝換一段，提詞機會照段落停頓。</p>
+    <textarea id="scr" style="min-height:45vh">${esc(p.script || "")}</textarea><button class="btn primary wide" id="ssave">儲存</button>`);
+  $("#ssave", sc).onclick = () => { p.script = $("#scr", sc).value; touch(view.pid); sc._close(); render(); toast("腳本已儲存"); };
+}
+function prompterHTML(text) { return `<div class="prompter" id="pmt"><div class="pmtext" id="pmtext">${esc(text).split(/\n{2,}/).map(x => `<p>${x.replace(/\n/g, "<br>")}</p>`).join("")}<div style="height:60vh"></div></div></div>`; }
+function bindPrompter(root, getRunning) {
+  const box = $("#pmt", root); let speed = Number(ls.get("pm-speed", 40)), last = 0, raf = 0, on = false;
+  const loop = ts => { if (on) { if (last) box.scrollTop += speed * (ts - last) / 1000; last = ts; } raf = requestAnimationFrame(loop); };
+  raf = requestAnimationFrame(loop);
+  return { play() { on = true; last = 0; }, pause() { on = false; }, toggle() { on = !on; last = 0; return on; }, faster() { speed = Math.min(160, speed + 10); ls.set("pm-speed", speed); return speed; }, slower() { speed = Math.max(10, speed - 10); ls.set("pm-speed", speed); return speed; }, reset() { box.scrollTop = 0; }, stop() { cancelAnimationFrame(raf); } };
+}
+function openPrompter() {
+  const p = curProj(); if (!(p.script || "").trim()) return toast("先寫腳本");
+  const sc = document.createElement("div"); sc.className = "pmfull";
+  sc.innerHTML = `${prompterHTML(p.script)}<div class="pmbar"><button id="pmx">✕</button><button id="pms">－慢</button><button id="pmp" class="pmplay">▶ 開始</button><button id="pmf">快＋</button><button id="pmr">↺</button></div>`;
+  document.body.appendChild(sc); document.body.style.overflow = "hidden";
+  const P = bindPrompter(sc);
+  $("#pmx", sc).onclick = () => { P.stop(); sc.remove(); document.body.style.overflow = ""; };
+  $("#pmp", sc).onclick = e => { e.currentTarget.textContent = P.toggle() ? "❚❚ 暫停" : "▶ 開始"; };
+  $("#pmf", sc).onclick = () => toast("速度 " + P.faster()); $("#pms", sc).onclick = () => toast("速度 " + P.slower()); $("#pmr", sc).onclick = () => P.reset();
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -919,6 +963,9 @@ document.addEventListener("click", async e => {
     if (act === "sync") { await sync(); return toast(SYNC === "ok" ? "已同步" : "同步沒成功"); }
     if (act === "newproj") return newProject();
     if (act === "quickgo") return quickGo();
+    if (act === "askscript") return askScript();
+    if (act === "editscript") return editScript();
+    if (act === "prompter") return openPrompter();
     if (act === "fromworld") return fromWorld();
     if (act === "cutday") { const p = curProj(), di = Math.min(view.day, p.days.length - 1), d = p.days[di], sm = projSummary(p, di); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); return sendToClaude(`幫我剪：${p.title}／D${di + 1}${d.title ? " " + d.title : ""}（${sm}）${fx ? "，" + fx : ""}。地點：${d.places.map(x => x.name).join("、") || "—"}`); }
     if (act === "cutproj") { const p = curProj(), sm = projSummary(p); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const where = p.days.map((d, i) => `D${i + 1} ` + (d.places.map(x => x.name).join("、") || "—")).join("；"); return sendToClaude(`幫我剪整個企劃：${p.title}（${sm}）${fx ? "，" + fx : ""}。地點：${where}`); }

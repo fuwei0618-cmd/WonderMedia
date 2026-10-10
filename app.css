@@ -366,3 +366,20 @@ button.addclip{background:transparent;font-family:inherit}
 .top .icon-btn{width:44px;height:44px;font-size:30px;line-height:1;color:var(--ink);background:var(--card);box-shadow:var(--shadow);border-radius:12px;flex:none}
 .top .icon-btn[data-act$="menu"]{font-size:26px;letter-spacing:1px}
 .dayhead .icon-btn{width:40px;height:40px;font-size:20px;color:var(--ink)}
+/* 口播腳本、提詞機 */
+.scard2{margin-top:10px;padding:12px 14px}
+.spreview{margin:6px 0 0;font-size:14px;white-space:pre-wrap;color:var(--muted)}
+.pmfull{position:fixed;inset:0;z-index:60;background:#000;color:#fff;display:flex;flex-direction:column}
+.pmfull .prompter{flex:1}
+.prompter{overflow:hidden;position:relative}
+.pmtext{padding:30vh 24px 0;font-size:34px;line-height:1.5;font-weight:700}
+.pmtext p{margin:0 0 1.2em}
+.prompter{height:100%;overflow-y:auto;scrollbar-width:none}
+.pmbar{display:flex;gap:8px;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));background:#111}
+.pmbar button{border:0;border-radius:12px;background:#333;color:#fff;padding:12px 14px;font-size:16px;font-weight:700}
+.pmbar .pmplay{background:#F2A900;color:#1b1b1b}
+.campm{position:absolute;left:0;right:0;top:calc(70px + env(safe-area-inset-top,0px));height:34vh;background:rgba(0,0,0,.45);z-index:3}
+.campm .prompter{height:100%}
+.campm .pmtext{font-size:26px;padding:6vh 20px 0}
+.campmbtn{position:absolute;right:14px;top:calc(120px + 34vh + env(safe-area-inset-top,0px));z-index:4}
+.campmbtn.on{background:#F2A900!important;color:#1b1b1b}
