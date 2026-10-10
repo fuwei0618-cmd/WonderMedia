@@ -1,0 +1,226 @@
+{
+"stickers": [
+{
+"n": "Q版愛心臉",
+"cat": "愛心",
+"use": "開心、被稱讚",
+"img": "kit/stickers/s01.webp"
+},
+{
+"n": "心碎",
+"cat": "愛心",
+"use": "被拒絕、已讀不回",
+"img": "kit/stickers/s02.webp"
+},
+{
+"n": "愛心串",
+"cat": "愛心",
+"use": "甜蜜收尾",
+"img": "kit/stickers/s03.webp"
+},
+{
+"n": "愛心爆",
+"cat": "愛心",
+"use": "超喜歡、驚喜",
+"img": "kit/stickers/s04.webp"
+},
+{
+"n": "手繪愛心",
+"cat": "愛心",
+"use": "溫柔、喜歡",
+"img": "kit/stickers/s05.webp"
+},
+{
+"n": "飄浮小愛心",
+"cat": "愛心",
+"use": "小確幸",
+"img": "kit/stickers/s06.webp"
+},
+{
+"n": "想法泡泡",
+"cat": "表情符號",
+"use": "內心戲",
+"img": "kit/stickers/s07.webp"
+},
+{
+"n": "汗滴",
+"cat": "表情符號",
+"use": "尷尬、冷場",
+"img": "kit/stickers/s08.webp"
+},
+{
+"n": "腮紅",
+"cat": "表情符號",
+"use": "害羞",
+"img": "kit/stickers/s09.webp"
+},
+{
+"n": "超大",
+"cat": "表情符號",
+"use": "份量驚人",
+"img": "kit/stickers/s10.webp"
+},
+{
+"n": "閃亮",
+"cat": "表情符號",
+"use": "開場、亮點",
+"img": "kit/stickers/s11.webp"
+},
+{
+"n": "集中線",
+"cat": "表情符號",
+"use": "重點、吶喊",
+"img": "kit/stickers/s12.webp"
+},
+{
+"n": "驚嘆問號",
+"cat": "表情符號",
+"use": "疑惑、傻眼",
+"img": "kit/stickers/s13.webp"
+},
+{
+"n": "倒帶",
+"cat": "吃喝",
+"use": "回到過去",
+"img": "kit/stickers/s14.webp"
+},
+{
+"n": "叮咚",
+"cat": "吃喝",
+"use": "上菜",
+"img": "kit/stickers/s15.webp"
+},
+{
+"n": "味噌湯",
+"cat": "吃喝",
+"use": "湯品",
+"img": "kit/stickers/s16.webp"
+},
+{
+"n": "好吃",
+"cat": "吃喝",
+"use": "第一口",
+"img": "kit/stickers/s17.webp"
+},
+{
+"n": "歸零",
+"cat": "吃喝",
+"use": "吃光光",
+"img": "kit/stickers/s18.webp"
+},
+{
+"n": "錢錢",
+"cat": "吃喝",
+"use": "價格（字已寫死）",
+"img": "kit/stickers/s19.webp"
+},
+{
+"n": "鰻魚吉祥物",
+"cat": "吃喝",
+"use": "鰻魚店專用",
+"img": "kit/stickers/s20.webp"
+}
+],
+"frames": [
+{
+"n": "便條紙",
+"use": "旁白註解",
+"font": "清松手寫",
+"img": "kit/frames/f01.webp"
+},
+{
+"n": "印章・紅",
+"use": "蓋章認證",
+"font": "漫黑",
+"img": "kit/frames/f02.webp"
+},
+{
+"n": "對話框・粉",
+"use": "我說的話",
+"font": "粉圓",
+"img": "kit/frames/f03.webp"
+},
+{
+"n": "愛心框",
+"use": "得意、喜歡",
+"font": "粉圓",
+"img": "kit/frames/f04.webp"
+},
+{
+"n": "爆炸框・藍",
+"use": "大喊",
+"font": "漫黑",
+"img": "kit/frames/f05.webp"
+},
+{
+"n": "聊天框・綠",
+"use": "已讀不回梗",
+"font": "粉圓",
+"img": "kit/frames/f06.webp"
+},
+{
+"n": "膠囊・黃斜",
+"use": "小標籤",
+"font": "粉圓",
+"img": "kit/frames/f07.webp"
+},
+{
+"n": "虛線泡泡・灰",
+"use": "小聲、碎念",
+"font": "清松手寫",
+"img": "kit/frames/f08.webp"
+},
+{
+"n": "雲朵・想法",
+"use": "心裡偷想",
+"font": "清松手寫",
+"img": "kit/frames/f09.webp"
+},
+{
+"n": "黑條・黃字",
+"use": "綜藝字幕",
+"font": "漫黑",
+"img": "kit/frames/f10.webp"
+}
+],
+"sfx": [
+{
+"n": "叮",
+"src": "kit/sfx/x01.m4a"
+},
+{
+"n": "咻",
+"src": "kit/sfx/x02.m4a"
+},
+{
+"n": "啵",
+"src": "kit/sfx/x03.m4a"
+},
+{
+"n": "彈簧",
+"src": "kit/sfx/x04.m4a"
+},
+{
+"n": "收銀機",
+"src": "kit/sfx/x05.m4a"
+},
+{
+"n": "蟋蟀冷場",
+"src": "kit/sfx/x06.m4a"
+}
+],
+"music": [
+{
+"n": "可愛 · 烏克麗麗 · 112bpm",
+"src": "kit/music/m01.m4a"
+},
+{
+"n": "快節奏 · 電子 · 128bpm",
+"src": "kit/music/m02.m4a"
+},
+{
+"n": "慵懶 · 爵士lofi · 78bpm",
+"src": "kit/music/m03.m4a"
+}
+]
+}

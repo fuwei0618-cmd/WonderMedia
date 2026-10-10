@@ -186,6 +186,7 @@ function render() {
   else if (view.tab === "river") app.innerHTML = riverHTML();
   else if (view.tab === "sea") app.innerHTML = seaHTML();
   else if (view.tab === "blocks") app.innerHTML = blocksHTML();
+  else if (view.tab === "wb") app.innerHTML = wbHTML(view.pid);
   else if (view.tab === "set") app.innerHTML = settingsHTML();
   else if (view.tab === "p" && view.place && DATA.projects[view.pid]) app.innerHTML = placeHTML();
   else if (view.tab === "p" && DATA.projects[view.pid]) app.innerHTML = projectHTML();
@@ -202,7 +203,7 @@ const ICON = {
   set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>'
 };
 function tabsHTML() {
-  const cur = view.tab === "p" || view.tab === "home" || view.tab === "blocks" ? "work" : view.tab === "set" ? "src" : view.tab;
+  const cur = view.tab === "p" || view.tab === "home" || view.tab === "blocks" || view.tab === "wb" ? "work" : view.tab === "set" ? "src" : view.tab;
   return `<button data-go="src" aria-current="${cur === "src"}">${ICON.src}源頭</button>
     <button data-go="river" aria-current="${cur === "river"}">${ICON.river}河流</button>
     <button class="rec" data-act="capture" aria-label="隨手記"><span class="dot"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span></button>
@@ -214,8 +215,9 @@ function progress(pl) { const n = pl.shots.length, d = pl.shots.filter(s => s.do
 function homeHTML() {
   const ps = Object.entries(DATA.projects).map(([id, p]) => ({ id, ...p })).sort((a, b) => ((b.days[0] || {}).date || "").localeCompare((a.days[0] || {}).date || ""));
   const picks = riverItems().filter(x => x.o.pick);
-  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1><button class="btn sm ghost" data-go="blocks">場景積木</button></div>
-  <p class="hint">從河流挑好的素材和拍攝企劃都在這裡，準備好就複製一句話給 Claude 剪。</p>
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>
+  ${wbNav("plan")}
+  <p class="hint">開企劃時選好賽道和劇本，分鏡積木和剪法會自動帶出來；從河流挑的素材也在這裡等著剪。</p>
   ${syncBanner()}
   <section class="section"><header><h2>⭐ 從河流挑的素材</h2><span class="muted mono" style="font-size:13px">${picks.length} 則</span></header>
     <div class="card">${picks.length ? `<div class="pickrow">${picks.slice(0, 12).map(x => thumbHTML(x)).join("")}</div><button class="btn primary wide" data-act="cutpicks" style="margin-top:12px">📋 複製「幫我剪：河流挑選」</button>` : `<p class="hint">在河流裡按 ☆ 挑選，挑好的會出現在這裡。</p>`}</div></section>
@@ -231,6 +233,7 @@ function projectHTML() {
   return `<div class="top"><button class="icon-btn" data-go="home" aria-label="返回">‹</button><h1>${esc(p.title)}</h1><button class="icon-btn" data-act="projmenu" aria-label="更多">⋯</button></div>
   <div class="daytabs">${p.days.map((x, i) => `<button data-go="p/${view.pid}/${i}" aria-current="${i === di}"><b>D${i + 1}</b><small>${esc(md(x.date).replace(/（.*/, ""))}</small></button>`).join("")}<button data-act="addday"><b>＋</b><small>加一天</small></button></div>
   ${syncBanner()}
+  ${projFormula(p)}
   <div class="dayhead t-food" style="--tc:var(--muted);margin-top:10px"><div class="row"><span class="mono muted" style="font-size:13px">D${di + 1}・${esc(md(d.date))}</span><span class="chip">${esc(p.tag)}</span><span class="grow"></span><button class="icon-btn" data-act="editday" aria-label="編輯這天">✎</button></div><h1>${esc(d.title || p.title)}</h1></div>
   <p class="hint" style="margin-top:6px">每個地點選一塊場景積木，拍攝清單會自動帶出來。拍完一個鏡頭就把影片掛上去。</p>
   <section class="section"><h2>這天的地點</h2><div class="card"><div class="tl">
@@ -271,7 +274,9 @@ function placeHTML() {
 }
 function blocksHTML() {
   const B = blocks();
-  return `<div class="top"><button class="icon-btn" data-go="home" aria-label="返回">‹</button><h1 style="font-size:20px">場景積木</h1></div>
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>
+  ${wbNav("scn")}
+  <p class="wbq">分鏡｜每個地方拍什麼？</p>
   <p class="hint">新增地點時選一塊，拍攝清單就自動帶出。在地點裡改過鏡頭，可以按「存成這塊積木的預設」。</p>
   <section class="section"><div class="card">${Object.entries(B).map(([k, b]) => `<details class="blk"><summary class="row" style="cursor:pointer"><span class="chip type ${b.cls}">${esc(b.name)}</span><span class="muted" style="font-size:13px">${b.shots.length} 個鏡頭</span></summary>
     <ol style="margin:8px 0 0;padding-left:22px;font-size:14px">${b.shots.map(s => `<li>${esc(s.n)}${s.h ? `<span class="muted">｜${esc(s.h)}</span>` : ""}</li>`).join("") || "<li class='muted'>自由拍</li>"}</ol>
@@ -304,15 +309,20 @@ const curPlace = () => curDay().places.find(x => x.id === view.place);
 const typeOpts = () => Object.entries(blocks()).map(([k, b]) => [k, b.name]);
 
 function newProject() {
-  form("新企劃", [{ k: "title", l: "企劃名稱", ph: "例如：週末吃鰻天下" }, { k: "tag", l: "分類", opts: TAGS.map(t => [t, t]), v: "生活" }, { k: "date", l: "日期（第一天）", type: "date", v: todayISO() }, { k: "days", l: "幾天", type: "number", v: "1" }], v => {
+  const W = wb();
+  form("新企劃", [{ k: "title", l: "企劃名稱", ph: "例如：週末吃鰻天下" }, { k: "tag", l: "分類", opts: TAGS.map(t => [t, t]), v: "生活" },
+    { k: "style", l: "0 風格・賽道（這支片是什麼味道？）", opts: [["", "先不選"]].concat(W.styles.map(x => [x.n, x.n])), v: "" },
+    { k: "tpl", l: "1 劇本・影片模板（整支怎麼排？）", opts: [["", "先不選"]].concat(W.templates.map(x => [x.n, x.n + "：" + x.flow.join("→")])), v: "" },
+    { k: "date", l: "日期（第一天）", type: "date", v: todayISO() }, { k: "days", l: "幾天", type: "number", v: "1" }], v => {
     if (!v.title) { toast("取個名字"); return false; }
     const n = Math.max(1, Math.min(14, Number(v.days) || 1)), days = [];
     for (let i = 0; i < n; i++) { const dt = new Date(v.date + "T00:00"); dt.setDate(dt.getDate() + i); days.push({ id: uid("d"), date: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()), title: "", places: [] }); }
-    const id = uid("p"); DATA.projects[id] = { title: v.title, tag: v.tag, createdAt: todayISO(), days, _u: Date.now() }; touch(id); go("p/" + id + "/0");
-  });
+    const id = uid("p"); DATA.projects[id] = { title: v.title, tag: v.tag, style: v.style, tpl: v.tpl, createdAt: todayISO(), days, _u: Date.now() }; touch(id); go("p/" + id + "/0");
+  }, `<p class="hint" style="margin:0">選了劇本，插入地點時會先推薦適合的分鏡積木；選了賽道，幫我剪會帶上預設剪法。</p>`);
 }
 function addPlace() {
-  form("插入地點", [{ k: "name", l: "地點名稱", ph: "例如：鰻天下" }, { k: "type", l: "場景積木", opts: typeOpts(), v: "food" }, { k: "time", l: "時間", type: "time", v: nowHM() }], v => {
+  const sug = tplBlocks(curProj()), opts = typeOpts().sort((x, y) => (sug.indexOf(x[0]) < 0 ? 99 : sug.indexOf(x[0])) - (sug.indexOf(y[0]) < 0 ? 99 : sug.indexOf(y[0]))).map(o => [o[0], (sug.includes(o[0]) ? "★ " : "") + o[1]]);
+  form("插入地點", [{ k: "name", l: "地點名稱", ph: "例如：鰻天下" }, { k: "type", l: "場景積木" + (sug.length ? "（★ 是劇本推薦的）" : ""), opts, v: sug[0] || "food" }, { k: "time", l: "時間", type: "time", v: nowHM() }], v => {
     if (!v.name) { toast("輸入地點名稱"); return false; }
     const pl = newPlace(v.name, v.type, v.time); curDay().places.push(pl); touch(view.pid); go(`p/${view.pid}/${view.day}/${pl.id}`);
   });
@@ -623,6 +633,7 @@ function seaHTML() {
   return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">出海口</h1><button class="btn sm primary" data-act="newpost">＋ 記一次發布</button></div>
   <p class="hint">剪好的片從這裡出海。記下發在哪、連結和成效，之後回頭看哪種內容最有反應。</p>
   <section class="section"><div class="seagrid">${sum.map(x => `<div class="card seac"><div class="pf">${esc(x.pf)}</div><div class="mono big">${x.n}</div><div class="muted" style="font-size:12px">支・觀看 ${num(x.v)}・讚 ${num(x.l)}</div></div>`).join("")}</div></section>
+  ${styleStats(ps, num)}
   <section class="section"><header><h2>發布紀錄</h2></header>
   ${ps.length ? `<div class="stack">${ps.map(p => `<button class="card post" data-post="${p.id}"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.platform)}</span><span class="mono muted" style="font-size:12px">${esc(md(p.date))}</span></div>
     <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted mono" style="font-size:12px;margin-top:4px"><span>👀 ${num(Number(p.views) || 0)}</span><span>♥ ${num(Number(p.likes) || 0)}</span><span>💬 ${num(Number(p.comments) || 0)}</span>${p.saves ? `<span>🔖 ${num(Number(p.saves))}</span>` : ""}</div>${p.note ? `<p class="hint" style="margin-top:6px">${esc(p.note)}</p>` : ""}</button>`).join("")}</div>`
@@ -640,6 +651,87 @@ function editPost(id) {
     id ? `${p.url ? `<a class="btn ghost wide" href="${esc(p.url)}" target="_blank" rel="noopener">打開貼文 ↗</a>` : ""}<button class="btn danger wide" id="pdel">刪除這筆</button>` : "");
   if (id) $("#pdel", sc).onclick = e => { const b = e.currentTarget; if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "再按一次確定刪除"; return; } delete DATA.posts[id]; DATA.deleted["o/" + id] = Date.now(); DIRTY = true; writeCache(); scheduleSync(); sc._close(); render(); };
 }
+
+
+/* ---------- 工作台五層：風格・劇本・分鏡・道具・剪法（可改，存在 DATA.docs.wb 同步 OneDrive） ---------- */
+const WB_DEFAULT = {"styles": [{"n": "實用攻略型", "core": "景點懶人包、路線地圖、避坑與花費分析", "hw": "遊覽攻略、拍照機位", "m": "Vlog 自動編排＋資訊字卡"}, {"n": "氛圍感美學／微電影", "core": "高質感畫面、微電影鏡頭感，搭配口播或旁白與音樂", "hw": "微電影氛圍", "m": "音樂卡點＋調色（你主導）"}, {"n": "第一人稱沉浸（POV）", "core": "Ray-Ban 視角、第一人稱鏡頭、原聲與步伐節奏", "hw": "", "m": "Vlog 自動編排，原聲為主、少字"}, {"n": "主觀評測／說書", "core": "面對鏡頭聊天、講旅行荒謬故事與主觀評分", "hw": "心得感想", "m": "口播剪輯（去氣口、停頓）"}, {"n": "預算／CP 值極致", "core": "平價替代景點、CP 值實測", "hw": "遊覽攻略", "m": "口播剪輯＋價格字卡"}, {"n": "靈性／療癒哲理", "core": "慢節奏、與內心對話的哲理金句與冥想感", "hw": "", "m": "慢節奏旁白＋氛圍配樂"}, {"n": "特殊主題／文化挖掘", "core": "專攻古建築、藝術展覽等深層文化", "hw": "歷史人文", "m": "知識講解（動態字幕、圖解）"}, {"n": "頂級開箱／飯店設備控", "core": "奢華飯店開箱、開箱高級設備", "hw": "", "m": "開箱結構＋口播"}, {"n": "互動問答／隨機冒險", "core": "讓粉絲投票決定行程、隨機抽籤冒險", "hw": "", "m": "口播剪輯＋投票字卡"}], "templates": [{"n": "旅行 Vlog", "flow": ["開場 Hook", "每天", "每個地點", "結尾心得"], "sty": "攻略、氛圍、POV", "blk": ["move", "play", "food", "stay"]}, {"n": "生活 Vlog", "flow": ["開場", "今天的幾件事", "碎碎念收尾"], "sty": "POV、療癒", "blk": ["free", "cook", "food"]}, {"n": "探店／美食", "flow": ["一句話評價先講", "店家", "餐點", "總評"], "sty": "評測、CP 值", "blk": ["food", "night"]}, {"n": "開箱／好物", "flow": ["為什麼買", "外觀", "實測", "優缺點"], "sty": "開箱、評測", "blk": ["free"]}, {"n": "穿搭", "flow": ["整體", "單品細節", "場合搭配"], "sty": "氛圍", "blk": ["wear"]}, {"n": "街頭表演", "flow": ["現場氛圍", "表演片段", "觀眾反應", "幕後"], "sty": "氛圍、POV", "blk": ["music"]}, {"n": "合唱團", "flow": ["練習花絮", "演出", "團員訪談"], "sty": "氛圍", "blk": ["music"]}, {"n": "Podcast", "flow": ["本集主題", "錄音", "精華切片 3 到 5 段"], "sty": "評測、療癒", "blk": ["free"]}], "steps": [{"n": "素材整理", "who": "Claude", "d": "依拍攝清單分類、挑出能用的片段"}, {"n": "腳本與標題", "who": "Claude 草擬，你定稿", "d": "Google Map 地點、吸睛標題"}, {"n": "粗剪＋地標字卡", "who": "Claude", "d": "排時間線、切掉空白和重複"}, {"n": "片頭片尾", "who": "Claude", "d": "套你的固定模板"}, {"n": "音樂＋卡點", "who": "Claude", "d": "從道具櫃挑配樂，剪接點對拍子"}, {"n": "調色", "who": "你", "d": "亮度、對比、濾鏡，套用到全部"}, {"n": "特效、貼圖、音效", "who": "Claude 先放，你微調", "d": "從道具櫃拿"}, {"n": "封面", "who": "你", "d": "Canva，一個內建兩張"}, {"n": "文字字幕", "who": "Claude 初稿，你修", "d": "文字框、字幕字體照道具櫃"}, {"n": "音樂淡出、透明度", "who": "Claude", "d": "收尾漸弱"}, {"n": "Shorts 切片", "who": "Claude", "d": "從長片切出直式短版，套上新模板"}], "methods": [{"n": "素材 → 剪映草稿", "d": "照劇本排好、放好字幕貼圖配樂，存成剪映草稿，你最後修", "fit": "全部賽道", "st": "在用"}, {"n": "口播剪輯", "d": "去氣口、停頓、重複句，自動上字幕", "fit": "評測、CP 值、問答", "st": "做得到"}, {"n": "Vlog 自動編排", "d": "隨手拍丟進來，看畫面和聲音排成故事、配音樂", "fit": "攻略、POV、生活", "st": "做得到"}, {"n": "爆款複刻／一鍵套範本", "d": "拆解一支爆款的鏡頭節奏，用你的素材照著排", "fit": "懶人套範本", "st": "要一支參考片"}, {"n": "知識動畫", "d": "動態字幕、圖解、地圖動畫", "fit": "文化挖掘、攻略", "st": "還沒試過"}]};
+function wb() { const c = DATA.docs.wb || {}; const out = {}; for (const k in WB_DEFAULT) out[k] = c[k] || WB_DEFAULT[k]; return out; }
+function saveWB(k, list) { DATA.docs.wb = { ...(DATA.docs.wb || {}), [k]: list, _u: Date.now() }; DIRTY = true; writeCache(); scheduleSync(); }
+const WBTABS = [["plan", "企劃", "home"], ["sty", "風格", "wb/sty"], ["tpl", "劇本", "wb/tpl"], ["scn", "分鏡", "blocks"], ["kit", "道具", "wb/kit"], ["cut", "剪法", "wb/cut"]];
+function wbNav(cur) { return `<nav class="wbnav">${WBTABS.map(([k, l, h]) => `<button data-go="${h}" aria-current="${k === cur}">${l}</button>`).join("")}</nav>`; }
+const tplOf = p => p && p.tpl ? wb().templates.find(x => x.n === p.tpl) : null;
+const styleOf = p => p && p.style ? wb().styles.find(x => x.n === p.style) : null;
+const styleMethod = p => { const s = styleOf(p); return s ? s.m : ""; };
+function tplBlocks(p) { const t = tplOf(p); return t ? (t.blk || []).filter(k => blocks()[k]) : []; }
+function projFormula(p) {
+  if (!p.style && !p.tpl) return `<p class="hint" style="margin-top:8px">這個企劃還沒選賽道和劇本，右上角 ⋯ 可以補上。</p>`;
+  const t = tplOf(p), s = styleOf(p);
+  return `<div class="formula card">${s ? `<div><span class="fl">風格</span><b>${esc(s.n)}</b><span class="muted">・剪法 ${esc(s.m)}</span></div>` : ""}${t ? `<div><span class="fl">劇本</span><b>${esc(t.n)}</b></div><div class="flow">${t.flow.map(x => `<span>${esc(x)}</span>`).join("<i>→</i>")}</div>` : ""}${s && s.hw ? `<div class="muted" style="font-size:12px">功課：${esc(s.hw)}</div>` : ""}</div>`;
+}
+function styleStats(ps, num) {
+  const by = {}; ps.forEach(x => { const p = DATA.projects[x.pid]; const k = (p && p.style) || "（沒選賽道）"; by[k] = by[k] || { n: 0, v: 0, l: 0 }; by[k].n++; by[k].v += Number(x.views) || 0; by[k].l += Number(x.likes) || 0; });
+  const rows = Object.entries(by).sort((a, b) => b[1].v / b[1].n - a[1].v / a[1].n);
+  if (!rows.length) return "";
+  return `<section class="section"><header><h2>哪個賽道最有反應</h2></header><div class="card">${rows.map(([k, x]) => `<div class="srow"><b>${esc(k)}</b><span class="mono muted">${x.n} 支・平均觀看 ${num(Math.round(x.v / x.n))}・平均讚 ${num(Math.round(x.l / x.n))}</span></div>`).join("")}<p class="hint" style="margin-top:8px">發布時選「來自哪個企劃」，就會算進那個企劃的賽道。</p></div></section>`;
+}
+const WBDEF = {
+  sty: { key: "styles", q: "風格｜這支片是什麼味道？", hint: "先選賽道，就決定了要做什麼功課、用哪種剪法。", fields: [["n", "賽道"], ["core", "核心風格"], ["hw", "功課"], ["m", "預設剪法"]] },
+  tpl: { key: "templates", q: "劇本｜整支怎麼排？", hint: "影片模板決定段落順序。推薦積木會在插入地點時排在最前面。", fields: [["n", "模板"], ["flow", "結構（用 → 分開）"], ["sty", "常用賽道"], ["blk", "推薦積木"]] },
+  cut: { key: "steps", q: "剪法｜怎麼剪、誰來剪？", hint: "你的剪輯工序，每一步標好誰負責。", fields: [["n", "步驟"], ["who", "誰做"], ["d", "內容"]] },
+  meth: { key: "methods", q: "", hint: "", fields: [["n", "AI 剪法"], ["d", "做什麼"], ["fit", "適合賽道"], ["st", "現在"]] }
+};
+let KIT = null;
+async function loadKit() { if (KIT) return KIT; try { KIT = await (await fetch("kit/kit.json")).json(); } catch (e) { KIT = { stickers: [], frames: [], sfx: [], music: [] }; } return KIT; }
+const KF = { tab: "stickers", cat: "全部" };
+function wbHTML(sub) {
+  const W = wb(), head = `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>${wbNav(sub)}`;
+  if (sub === "kit") {
+    if (!KIT) { loadKit().then(() => render()); return head + `<p class="hint" style="margin-top:12px">道具櫃載入中…</p>`; }
+    const cats = ["全部", ...new Set(KIT.stickers.map(x => x.cat))];
+    const tabs = [["stickers", "貼圖"], ["frames", "文字框"], ["sfx", "音效"], ["music", "配樂"]];
+    let body = "";
+    if (KF.tab === "stickers" || KF.tab === "frames") {
+      const xs = KIT[KF.tab].filter(x => KF.tab === "frames" || KF.cat === "全部" || x.cat === KF.cat);
+      body = (KF.tab === "stickers" ? `<div class="rfilters">${cats.map(c => `<button data-kcat="${esc(c)}" aria-pressed="${KF.cat === c}">${esc(c)}</button>`).join("")}</div>` : "") +
+        `<div class="kitgrid ${KF.tab}">${xs.map(x => `<div class="kit"><div class="kpic"><img src="${x.img}" alt="${esc(x.n)}" loading="lazy"></div><b>${esc(x.n)}</b>${x.use ? `<span class="muted">${esc(x.use)}</span>` : ""}${x.font ? `<span class="chip">${esc(x.font)}</span>` : ""}</div>`).join("")}</div>`;
+    } else body = `<div class="sndgrid">${KIT[KF.tab].map(x => `<button class="snd" data-snd="${x.src}"><span class="dot">▶</span>${esc(x.n)}</button>`).join("")}</div>`;
+    return head + `<p class="wbq">道具｜長什麼樣子？</p><p class="hint">Claude 剪片時先從這裡拿。要增減素材，直接在 WonderMedia 對話裡跟 Claude 說，例如「素材庫加：哭哭的貼圖」。</p>
+      <div class="segs">${tabs.map(([k, l]) => `<button data-ktab="${k}" aria-pressed="${KF.tab === k}">${l} ${KIT[k].length}</button>`).join("")}</div>${body}
+      <p class="hint" style="margin-top:12px">字體分工：字幕 辰宇落雁體｜標題 源樣明體｜說話 粉圓｜心裡話 清松手寫｜大聲 漫黑</p>`;
+  }
+  const d = WBDEF[sub] || WBDEF.sty, list = W[d.key];
+  const cell = (it, k) => Array.isArray(it[k]) ? (k === "blk" ? it[k].map(b => (blocks()[b] || {}).name || b).join("、") : it[k].join(" → ")) : (it[k] || "—");
+  const cards = (def, lst, kind) => `<div class="stack">${lst.map((it, i) => `<button class="card wbcard" data-wbedit="${kind}:${i}"><div class="wbt"><span class="mono muted">${kind === "steps" ? i : i + 1}.</span> ${esc(it.n)}${kind === "steps" ? `<span class="chip ${/^你/.test(it.who) ? "you" : "cl"}">${esc(it.who)}</span>` : ""}${kind === "methods" ? `<span class="chip ${/在用|做得到/.test(it.st) ? "ok" : ""}">${esc(it.st)}</span>` : ""}</div>
+    ${def.fields.slice(1).filter(([k]) => !(kind === "steps" && k === "who") && !(kind === "methods" && k === "st")).map(([k, l]) => k === "flow" ? `<div class="flow">${(it.flow || []).map(x => `<span>${esc(x)}</span>`).join("<i>→</i>")}</div>` : `<div class="wbf"><span>${esc(l)}</span>${esc(cell(it, k))}</div>`).join("")}</button>`).join("")}
+    <button class="btn ghost wide" data-wbadd="${kind}">＋ 新增一筆</button></div>`;
+  let html = head + `<p class="wbq">${esc(d.q)}</p><p class="hint">${esc(d.hint)}點一筆就能改。</p>` + cards(d, list, d.key);
+  if (sub === "cut") html += `<section class="section"><h2>AI 剪法</h2><p class="hint">選了賽道，就等於選好了預設剪法。</p>${cards(WBDEF.meth, W.methods, "methods")}</section>`;
+  if (sub === "sty") html += `<p class="hint" style="margin-top:10px">「懶人一鍵套範本」是一種剪法，不是風格，放在剪法頁。</p>`;
+  return html;
+}
+function editWB(kind, i) {
+  const def = Object.values(WBDEF).find(x => x.key === kind), W = wb(), list = W[kind].map(x => ({ ...x })), it = i == null ? {} : list[i];
+  const B = blocks();
+  const fields = def.fields.map(([k, l]) => {
+    if (k === "blk") return null;
+    if (k === "m") return { k, l, opts: W.methods.map(x => [x.n, x.n]).concat(it.m && !W.methods.some(x => x.n === it.m) ? [[it.m, it.m]] : []), v: it.m || (W.methods[0] || {}).n };
+    if (k === "who") return { k, l, opts: [["Claude", "Claude"], ["你", "你"], ["Claude 先做，你修", "Claude 先做，你修"]].concat(it.who && !["Claude", "你", "Claude 先做，你修"].includes(it.who) ? [[it.who, it.who]] : []), v: it.who || "Claude" };
+    return { k, l, v: Array.isArray(it[k]) ? it[k].join(" → ") : it[k] || "" };
+  }).filter(Boolean);
+  const blkPick = kind === "templates" ? `<div class="field"><label>推薦積木（插入地點時排在最前面）</label><div class="row" id="blks">${Object.entries(B).map(([k, b]) => `<button class="tg ${(it.blk || []).includes(k) ? "on" : ""}" data-b="${k}">${esc(b.name)}</button>`).join("")}</div></div>` : "";
+  let sel = [...(it.blk || [])];
+  const sc = form(i == null ? "新增" : "編輯", fields, v => {
+    if (!v.n) { toast("名稱不能空白"); return false; }
+    const o = { ...it, ...v }; if (kind === "templates") { o.flow = v.flow.split(/\s*(?:→|->|>|、|，|,)\s*/).filter(Boolean); o.blk = sel; }
+    if (i == null) list.push(o); else list[i] = o; saveWB(kind, list); render(); toast("已儲存");
+  }, blkPick + (i == null ? "" : `<div class="row"><button class="btn sm ghost" id="wbup">↑ 往上移</button><button class="btn sm danger" id="wbdel">刪除</button></div>`));
+  if (kind === "templates") $("#blks", sc).onclick = e => { const b = e.target.closest("[data-b]"); if (!b) return; const k = b.dataset.b; sel = sel.includes(k) ? sel.filter(x => x !== k) : [...sel, k]; b.classList.toggle("on"); };
+  if (i != null) {
+    $("#wbup", sc).onclick = () => { if (i > 0) { [list[i - 1], list[i]] = [list[i], list[i - 1]]; saveWB(kind, list); sc._close(); render(); } };
+    $("#wbdel", sc).onclick = e => { const b = e.currentTarget; if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "再按一次確定"; return; } list.splice(i, 1); saveWB(kind, list); sc._close(); render(); };
+  }
+}
+let SND = null;
 
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
@@ -662,11 +754,11 @@ document.addEventListener("click", async e => {
     if (act === "addday") { const p = curProj(), last = p.days[p.days.length - 1], dt = new Date((last ? last.date : todayISO()) + "T00:00"); dt.setDate(dt.getDate() + (last ? 1 : 0)); p.days.push({ id: uid("d"), date: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()), title: "", places: [] }); touch(view.pid); return go(`p/${view.pid}/${p.days.length - 1}`); }
     if (act === "editday") { const d = curDay(); return form("這一天", [{ k: "title", l: "標題", v: d.title, ph: "例如：家庭聚餐" }, { k: "date", l: "日期", type: "date", v: d.date }], v => { d.title = v.title; d.date = v.date || d.date; touch(view.pid); render(); }); }
     if (act === "laugh") { const pl = curPlace(); pl.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ 已標記 " + nowHM()); }
-    if (act === "tocut") { const p = curProj(), pl = curPlace(); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
+    if (act === "tocut") { const p = curProj(), pl = curPlace(); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}${fx ? "（" + fx + "）" : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
     if (act === "export") { const b = new Blob([JSON.stringify(DATA, null, 1)], { type: "application/json" }); const u = URL.createObjectURL(b); const x = document.createElement("a"); x.href = u; x.download = "wondermedia-" + todayISO() + ".json"; x.click(); setTimeout(() => URL.revokeObjectURL(u), 3000); return; }
     if (act === "projmenu") {
-      const p = curProj(); const sc = sheet(`<h2>${esc(p.title)}</h2><div class="menu"><button data-m="edit">編輯名稱與分類</button><button data-m="del" class="danger">刪除這個企劃</button></div>`);
-      sc.onclick = ev => { const m = ev.target.closest("[data-m]"); if (!m) return; if (m.dataset.m === "edit") { sc._close(); form("企劃", [{ k: "title", l: "名稱", v: p.title }, { k: "tag", l: "分類", opts: TAGS.map(x => [x, x]), v: p.tag }], v => { p.title = v.title || p.title; p.tag = v.tag; touch(view.pid); render(); }); } if (m.dataset.m === "del") { if (!m.dataset.c) { m.dataset.c = 1; m.textContent = "再按一次確定刪除（OneDrive 的影片會保留）"; return; } delete DATA.projects[view.pid]; DATA.deleted["p/" + view.pid] = Date.now(); DIRTY = true; writeCache(); scheduleSync(); sc._close(); go("home"); } };
+      const p = curProj(); const sc = sheet(`<h2>${esc(p.title)}</h2><div class="menu"><button data-m="edit">編輯名稱、分類、賽道、劇本</button><button data-m="del" class="danger">刪除這個企劃</button></div>`);
+      sc.onclick = ev => { const m = ev.target.closest("[data-m]"); if (!m) return; if (m.dataset.m === "edit") { sc._close(); form("企劃", [{ k: "title", l: "名稱", v: p.title }, { k: "tag", l: "分類", opts: TAGS.map(x => [x, x]), v: p.tag }, { k: "style", l: "風格・賽道", opts: [["", "不選"]].concat(wb().styles.map(x => [x.n, x.n])), v: p.style || "" }, { k: "tpl", l: "劇本・影片模板", opts: [["", "不選"]].concat(wb().templates.map(x => [x.n, x.n])), v: p.tpl || "" }], v => { p.title = v.title || p.title; p.tag = v.tag; p.style = v.style; p.tpl = v.tpl; touch(view.pid); render(); }); } if (m.dataset.m === "del") { if (!m.dataset.c) { m.dataset.c = 1; m.textContent = "再按一次確定刪除（OneDrive 的影片會保留）"; return; } delete DATA.projects[view.pid]; DATA.deleted["p/" + view.pid] = Date.now(); DIRTY = true; writeCache(); scheduleSync(); sc._close(); go("home"); } };
       return;
     }
     if (act === "placemenu") {
@@ -678,6 +770,11 @@ document.addEventListener("click", async e => {
       return;
     }
   }
+  const we = t.closest("[data-wbedit]"); if (we) { const [k, i] = we.dataset.wbedit.split(":"); return editWB(k, +i); }
+  const wa = t.closest("[data-wbadd]"); if (wa) return editWB(wa.dataset.wbadd, null);
+  const kt = t.closest("[data-ktab]"); if (kt) { KF.tab = kt.dataset.ktab; if (SND) { SND.pause(); SND = null; } render(); return; }
+  const kc = t.closest("[data-kcat]"); if (kc) { KF.cat = kc.dataset.kcat; render(); return; }
+  const sd = t.closest("[data-snd]"); if (sd) { const was = SND && SND._src === sd.dataset.snd; if (SND) { SND.pause(); SND = null; } document.querySelectorAll(".snd.on").forEach(x => x.classList.remove("on")); if (!was) { SND = new Audio(sd.dataset.snd); SND._src = sd.dataset.snd; SND.play().catch(() => {}); sd.classList.add("on"); SND.onended = () => { sd.classList.remove("on"); SND = null; }; } return; }
   const pk = t.closest("[data-pick]"); if (pk) { const x = findItem(pk.dataset.pick); if (x) { x.o.pick = !x.o.pick; saveItem(x); render(); toast(x.o.pick ? "⭐ 已挑選，在工作台等著剪" : "已取消挑選"); } return; }
   const rf = t.closest("[data-rf]"); if (rf) { const v = rf.dataset.rf; RF.pick = v === "★" ? !RF.pick : false; RF.tag = v.startsWith("#") ? (RF.tag === v.slice(1) ? "" : v.slice(1)) : ""; if (v === "") { RF.pick = false; RF.tag = ""; } render(); return; }
   const it = t.closest("[data-item]"); if (it && !t.closest("[data-view]")) return openItem(it.dataset.item);
