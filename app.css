@@ -302,8 +302,8 @@ button.addclip{background:transparent;font-family:inherit}
 .rmeta{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;font-weight:700}
 .rmeta .muted{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .rtext{margin:0;font-size:14px;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.pick{border:0;background:transparent;font-size:22px;line-height:1;color:var(--muted);padding:2px 4px}
-.pick.on{color:var(--accent)}
+.pickstar{border:0;background:transparent;font-size:22px;line-height:1;color:var(--muted);padding:2px 4px}
+.pickstar.on{color:var(--accent)}
 .rfilters{display:flex;gap:6px;overflow-x:auto;padding-block:10px 2px;scrollbar-width:none}
 .rfilters button,.tg{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700;color:var(--muted)}
 .rfilters button[aria-pressed="true"],.tg.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}

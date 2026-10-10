@@ -263,7 +263,7 @@ function placeHTML() {
   <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
       <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
-      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
+      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
@@ -489,7 +489,7 @@ const KIND_LABEL = { text: "文字", audio: "語音", photo: "照片", video: "�
 /* 河流：源頭紀錄＋各企劃裡的鏡頭與隨手記，依時間排 */
 function riverItems() {
   const out = [];
-  for (const id in DATA.stream) { const r = DATA.stream[id]; out.push({ type: "rec", id, ts: r.ts, kind: recKind(r), text: r.text || "", media: r.media || [], o: r, where: r.src === "coach" ? "拍照教練" + (r.scene ? "・" + r.scene : "") : "源頭" }); }
+  for (const id in DATA.stream) { const r = DATA.stream[id]; out.push({ type: "rec", id, ts: r.ts, kind: recKind(r), text: r.text || "", media: r.media || [], o: r, where: r.src === "coach" ? "拍照教練" + (r.scene ? "・" + r.scene : "") : r.dual ? "源頭・雙鏡頭" : "源頭" }); }
   for (const pid in DATA.projects) { const p = DATA.projects[pid];
     p.days.forEach((d, di) => d.places.forEach(pl => {
       pl.shots.forEach(s => s.clips.forEach(c => out.push({ type: "clip", pid, ts: c.at || Date.parse(d.date), kind: c.kind, text: c.text || s.n, media: [c], o: c, where: p.title + "・" + pl.name, go: `p/${pid}/${di}/${pl.id}` })));
@@ -542,7 +542,7 @@ function itemHTML(x) {
   const scene = x.o.pose ? `<span class="chip">${esc(x.o.pose)}</span>` : "";
   return `<div class="ritem card">${thumbHTML(x)}<div class="rbody" data-item="${esc(itemKey(x))}"><div class="rmeta"><span class="mono">${hmOf(x.ts)}</span><span>${KIND_LABEL[x.kind] || ""}</span><span class="muted">${esc(x.where)}</span></div>
     ${x.text ? `<p class="rtext">${esc(x.text)}</p>` : ""}<div class="row" style="gap:4px">${scene}${tags}</div></div>
-    <button class="pick ${x.o.pick ? "on" : ""}" data-pick="${esc(itemKey(x))}" aria-label="${x.o.pick ? "取消挑選" : "挑選"}">${x.o.pick ? "★" : "☆"}</button></div>`;
+    <button class="pickstar ${x.o.pick ? "on" : ""}" data-pick="${esc(itemKey(x))}" aria-label="${x.o.pick ? "取消挑選" : "挑選"}">${x.o.pick ? "★" : "☆"}</button></div>`;
 }
 const RF = { tag: "", pick: false };
 function riverHTML() {
@@ -578,7 +578,7 @@ function openItem(k) {
 async function addRecord(kind, text, files, extra) {
   const ts = (extra && extra.ts) || Date.now(), r = { ts, kind, text: text || "", media: [], tags: [], pick: false, ...(extra || {}) };
   let k = 0; for (const f of files || []) { k++; const fk = f.kind || (/image/.test(f.file.type) ? "photo" : /video/.test(f.file.type) ? "video" : "audio");
-    const path = `源頭/${dateOf(ts)}/${r.src === "coach" ? "拍照教練" + (r.scene ? "_" + safeName(r.scene) : "") : "隨手記_" + (KIND_LABEL[fk] || "檔案")}_${stampOf(ts)}${files.length > 1 ? "-" + k : ""}.${extOf(f.file, f.file.type || "")}`;
+    const path = `源頭/${dateOf(ts)}/${r.src === "coach" ? "拍照教練" + (r.scene ? "_" + safeName(r.scene) : "") : r.dual ? "雙鏡頭" : "隨手記_" + (KIND_LABEL[fk] || "檔案")}_${stampOf(ts)}${files.length > 1 ? "-" + k : ""}.${extOf(f.file, f.file.type || "")}`;
     r.media.push(await addClip(null, f.file, path, fk)); }
   const id = uid("r"); DATA.stream[id] = r; touchRec(r); return id;
 }
@@ -589,10 +589,11 @@ function openCapture(mode) {
     ${mode === "text" ? "" : recorderHTML()}
     <div class="row" id="mlist"></div>
     <div class="field"><label for="ctext">${mode === "voice" ? "轉出來的文字（可以修改）" : "文字"}</label><textarea id="ctext" placeholder="想到什麼就寫，也可以按鍵盤上的麥克風口述"></textarea></div>
-    ${mode ? "" : `<div class="pickers"><label class="pick">📷 照片／影片<input id="cphoto" type="file" accept="image/*,video/*" multiple class="vh"></label></div>`}
+    ${mode ? "" : `<div class="pickers"><label class="pick">📷 照片／影片<input id="cphoto" type="file" accept="image/*,video/*" multiple class="vh"></label><button class="pick" id="cdual" type="button">📸 雙鏡頭</button></div>`}
     <button class="btn primary wide" id="csave">存進源頭</button>`, () => R && R.stopAll());
   const ta = $("#ctext", sc), refresh = () => { $("#mlist", sc).innerHTML = list(); };
   if (mode !== "text") R = bindRecorder(sc, ta, b => { media.push({ kind: "audio", file: b }); refresh(); });
+  if (!mode) $("#cdual", sc).onclick = () => { R && R.stopAll(); sc._close(); startDual(); };
   if (!mode) $("#cphoto", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: /video/.test(f.type) ? "video" : "photo", file: f }); e.target.value = ""; refresh(); };
   $("#mlist", sc).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { media.splice(+b.dataset.rm, 1); refresh(); } };
   if (mode === "text") setTimeout(() => ta.focus(), 50);
@@ -734,24 +735,35 @@ function editWB(kind, i) {
 let SND = null;
 
 
-/* 雙鏡頭：用 iPhone 捷徑打開 DoubleTake，拍完回來一鍵掛上剛拍的影片 */
-const DUAL_SHORTCUT = "DoubleTake";
-function startDual(shotId) {
-  const first = !ls.get("dual-ok", false);
-  const goNow = () => { ls.set("dual-pending", { pid: view.pid, day: view.day, place: view.place, shot: shotId, at: Date.now() }); location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(DUAL_SHORTCUT); };
-  if (!first) return goNow();
-  const sc = sheet(`<h2>📸 雙鏡頭（第一次設定）</h2>
-    <p style="margin:0">前後鏡頭同時拍要用 DoubleTake。網頁不能直接打開別的 App，所以用 iPhone 的「捷徑」當橋樑，只要設定一次：</p>
-    <ol class="steps"><li>App Store 安裝 <b>DoubleTake</b>（免費），打開後選好版型：畫中畫或上下分割</li>
-    <li>打開「捷徑」App → 右上 ＋ → 加入動作 → 搜尋「打開 App」→ 選 <b>DoubleTake</b></li>
-    <li>把這個捷徑命名為 <b>${DUAL_SHORTCUT}</b>（大小寫要一樣）→ 完成</li></ol>
-    <p class="hint" style="margin:0">之後按「📸 雙鏡頭」就會直接打開 DoubleTake。拍完存到相簿，回到 WonderMedia 會跳出「掛上剛拍的影片」，點一下選它就好。</p>
-    <button class="btn primary wide" id="dgo">設定好了，打開 DoubleTake</button>`);
-  $("#dgo", sc).onclick = () => { ls.set("dual-ok", true); sc._close(); goNow(); };
+/* 雙鏡頭：打開 Instagram 相機的「雙鏡頭」模式（免費），存到相簿後回來一鍵收進源頭 */
+function startDual() {
+  const goNow = () => { ls.set("dual-pending", { src: true, at: Date.now() }); const t0 = Date.now(); location.href = "instagram://camera";
+    setTimeout(() => { if (document.visibilityState === "visible" && Date.now() - t0 < 3000) toast("沒打開 Instagram？先在 App Store 安裝 Instagram"); }, 1800); };
+  if (ls.get("dual-ok2", false)) return goNow();
+  const sc = sheet(`<h2>📸 雙鏡頭（前後同時拍）</h2>
+    <p style="margin:0">用 Instagram 相機內建的「雙鏡頭」，免費、不用另外裝 App，拍完是一支前後合好的影片。</p>
+    <ol class="steps"><li>按下面的按鈕會打開 Instagram 相機</li>
+    <li>選「限時動態」或「Reels」，左邊工具列找 <b>雙鏡頭</b>（Dual），選好畫中畫或上下版型</li>
+    <li>錄好後按上方的 <b>↓ 下載</b>，存到相簿就好，不用發布</li>
+    <li>回到 WonderMedia，會跳出「收進剛拍的雙鏡頭」，點一下選那支影片</li></ol>
+    <p class="hint" style="margin:0">影片會變成源頭的一則紀錄，之後在河流挑選、交給 Claude 剪。</p>
+    <button class="btn primary wide" id="dgo">打開 Instagram 相機</button>`);
+  $("#dgo", sc).onclick = () => { ls.set("dual-ok2", true); sc._close(); goNow(); };
 }
 function checkDual() {
   const pd = ls.get("dual-pending", null); if (!pd) return;
   if (Date.now() - pd.at > 60 * 60 * 1000) { ls.set("dual-pending", null); return; }
+  if (pd.src) {
+    if (document.querySelector(".scrim")) return;
+    const sc = sheet(`<h2>📸 收進剛拍的雙鏡頭</h2><p class="hint" style="margin:0">存進源頭・${hmOf(Date.now())}</p>
+      <label class="btn primary wide">從相簿選剛拍的影片<input type="file" accept="video/*" multiple class="vh" id="dfile"></label>
+      <button class="btn ghost wide" id="dlater">先不要</button>`, () => {});
+    $("#dlater", sc).onclick = () => { ls.set("dual-pending", null); sc._close(); };
+    $("#dfile", sc).onchange = async e => { const files = [...e.target.files]; if (!files.length) return;
+      try { for (const f of files) { const id = await addRecord("video", "", [{ kind: "video", file: f }], { dual: true, tags: ["雙鏡頭"] }); (DATA.stream[id].media[0] || {}).dual = true; } } catch (er) { toast("存不進去：" + (er && er.message || "")); return; }
+      ls.set("dual-pending", null); sc._close(); go("src"); render(); toast("雙鏡頭影片已流進源頭"); uploadPending(); };
+    return;
+  }
   const p = DATA.projects[pd.pid], d = p && p.days[pd.day], pl = d && d.places.find(x => x.id === pd.place), i = pl ? pl.shots.findIndex(x => x.id === pd.shot) : -1;
   if (i < 0 || document.querySelector(".scrim")) return;
   const s = pl.shots[i];
