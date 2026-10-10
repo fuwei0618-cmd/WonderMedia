@@ -57,7 +57,7 @@ function seedData() {
   return d;
 }
 function nextSaturday() { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
-function newPlace(name, type, time) { return { id: uid("pl"), name, type, time: time || "", info: {}, shots: blocks()[type].shots.map(s => ({ id: uid("s"), ...s, done: false, clips: [] })), notes: [], laughs: [] }; }
+function newPlace(name, type, time) { const sh = blocks()[type].shots; return { id: uid("pl"), name, type, time: time || "", info: {}, shots: (sh.length ? sh : [S("隨手拍", "想拍就拍，不用照清單；之後要清單再到 ⋯ 換積木", 0)]).map(s => ({ id: uid("s"), ...s, done: false, clips: [] })), notes: [], laughs: [] }; }
 function normalize(d) { d = d || emptyData(); d.projects = d.projects || {}; d.docs = d.docs || {}; d.deleted = d.deleted || {}; d.stream = d.stream || {}; d.posts = d.posts || {}; return d; }
 function merge(a, b) {
   a = normalize(a); b = normalize(b); const out = emptyData();
@@ -217,11 +217,12 @@ function homeHTML() {
   const picks = riverItems().filter(x => x.o.pick);
   return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>
   ${wbNav("plan")}
+  <button class="btn primary wide quickgo" data-act="quickgo">⚡ 現在就拍<small>只要打地點，其他之後再補</small></button>
   <p class="hint">開企劃時選好賽道和劇本，分鏡積木和剪法會自動帶出來；從河流挑的素材也在這裡等著剪。</p>
   ${syncBanner()}
   <section class="section"><header><h2>⭐ 從河流挑的素材</h2><span class="muted mono" style="font-size:13px">${picks.length} 則</span></header>
     <div class="card">${picks.length ? `<div class="pickrow">${picks.slice(0, 12).map(x => thumbHTML(x)).join("")}</div><button class="btn primary wide" data-act="cutpicks" style="margin-top:12px">📋 複製「幫我剪：河流挑選」</button>` : `<p class="hint">在河流裡按 ☆ 挑選，挑好的會出現在這裡。</p>`}</div></section>
-  <section class="section"><header><h2>拍攝企劃</h2><button class="btn sm primary" data-act="newproj">＋ 新企劃</button></header>
+  <section class="section"><header><h2>拍攝企劃</h2><button class="btn sm ghost" data-act="newproj">＋ 完整企劃</button></header>
   <div class="stack">${ps.length ? ps.map(p => { const pls = p.days.flatMap(d => d.places); const tot = pls.reduce((a, pl) => a + pl.shots.length, 0), done = pls.reduce((a, pl) => a + progress(pl).d, 0);
     return `<button class="card pcard" data-go="p/${p.id}/0"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.tag)}</span><span class="mono muted" style="font-size:12px">${md((p.days[0] || {}).date)}${p.days.length > 1 ? " 起 " + p.days.length + " 天" : ""}</span></div>
       <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted" style="font-size:13px;margin-top:4px">${pls.map(x => esc(x.name)).join("・") || "還沒有地點"}</div>
@@ -255,18 +256,19 @@ function placeHTML() {
   const p = DATA.projects[view.pid], d = p.days[view.day], pl = d.places.find(x => x.id === view.place);
   if (!pl) { go("p/" + view.pid + "/" + view.day); return ""; }
   const b = blocks()[pl.type] || BUILTIN.free, pr = progress(pl);
-  return `<div class="top"><button class="icon-btn" data-go="p/${view.pid}/${view.day}" aria-label="返回">‹</button><h1>${esc(p.title)}</h1><button class="icon-btn" data-act="placemenu" aria-label="更多">⋯</button></div>
-  <div class="dayhead ${b.cls}"><div class="row"><span class="mono muted" style="font-size:13px">D${view.day + 1}・${esc(pl.time || "")}</span><span class="chip type">${esc(b.name)}</span></div><h1>${esc(pl.name)}</h1></div>
-  <section class="section"><h2>📝 這一站的紀錄</h2><div class="card grid2" id="info">
+  const INFO = `  <section class="section"><h2>📝 這一站的紀錄</h2><div class="card grid2" id="info">
     ${b.fields.map(f => `<div class="field ${f.full ? "full" : ""}"><label>${esc(f.l)}</label>${fieldHTML(f, pl.info[f.k])}</div>`).join("")}
-  </div></section>
-  <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
+  </div></section>`;
+  const SHOTS = `  <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
       <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
       <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
-    <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
+    <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>`;
+  return `<div class="top"><button class="icon-btn" data-go="p/${view.pid}/${view.day}" aria-label="返回">‹</button><h1>${esc(p.title)}</h1><button class="icon-btn" data-act="placemenu" aria-label="更多">⋯</button></div>
+  <div class="dayhead ${b.cls}"><div class="row"><span class="mono muted" style="font-size:13px">D${view.day + 1}・${esc(pl.time || "")}</span><span class="chip type">${esc(b.name)}</span></div><h1>${esc(pl.name)}</h1></div>
+  ${pl.type === "free" ? SHOTS + INFO : INFO + SHOTS}
   <section class="section"><header><h2>🎙️ 隨手記</h2><button class="btn sm primary" data-act="note">＋ 記一則</button></header>
     <div class="card">${pl.notes.length ? pl.notes.map(n => `<div class="note"><time>${new Date(n.ts).toTimeString().slice(0, 5)}</time>${n.text ? `<p>${esc(n.text)}</p>` : ""}<div class="clips">${(n.media || []).map(c => `<span class="clip ${c.od ? "up" : "wait"}">${c.kind === "audio" ? "🎙️" : c.kind === "photo" ? "📷" : "🎬"} ${c.od ? "已上傳" : "未上傳"}</span>`).join("")}</div></div>`).join("") : `<p class="hint">吃完對手機講一分鐘心得最好用：Claude 會用你自己的話寫配音腳本。</p>`}</div></section>
   <section class="section"><div class="card"><b>拍完了？</b><p class="hint" style="margin:4px 0 10px">按下面複製一句話，貼到 Claude 的「自媒體大神工具」對話就會開始剪。</p>
@@ -807,6 +809,21 @@ async function checkUpdate() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
 
+
+/* 現在就拍：只問在哪裡，自動開企劃＋今天＋地點（自由拍），直接進地點頁 */
+function quickGo() {
+  const sc = sheet(`<h2>⚡ 現在就拍</h2><div class="field"><label for="qname">在哪裡？</label><input id="qname" placeholder="例如：麥味登" enterkeyhint="go"></div>
+    <button class="btn primary wide" id="qgo">開拍</button><p class="hint" style="margin:0">會開一個今天的企劃，地點用「自由拍」：沒有固定清單，想拍就拍。賽道、劇本、拍攝清單都可以之後從 ⋯ 補。</p>`);
+  const inp = $("#qname", sc); setTimeout(() => inp.focus(), 50);
+  const goNow = () => {
+    const name = inp.value.trim() || "隨手拍 " + md(todayISO()).replace(/（.*/, "");
+    const pl = newPlace(name, "free", nowHM()), id = uid("p");
+    DATA.projects[id] = { title: name, tag: "生活", style: "", tpl: "", createdAt: todayISO(), quick: true, days: [{ id: uid("d"), date: todayISO(), title: "", places: [pl] }], _u: Date.now() };
+    touch(id); sc._close(); go(`p/${id}/0/${pl.id}`);
+  };
+  $("#qgo", sc).onclick = goNow; inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); goNow(); } };
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -817,6 +834,7 @@ document.addEventListener("click", async e => {
     if (act === "logout") return logout();
     if (act === "sync") { await sync(); return toast(SYNC === "ok" ? "已同步" : "同步沒成功"); }
     if (act === "newproj") return newProject();
+    if (act === "quickgo") return quickGo();
     if (act === "addplace") return addPlace();
     if (act === "quick" || act === "note") return openNote(act === "quick");
     if (act === "capture") return openCapture(null);
@@ -836,10 +854,10 @@ document.addEventListener("click", async e => {
       return;
     }
     if (act === "placemenu") {
-      const pl = curPlace(); const sc = sheet(`<h2>${esc(pl.name)}</h2><div class="menu"><button data-m="edit">改名稱、時間、積木</button><button data-m="world">移到旅遊手冊 World</button><button data-m="del" class="danger">刪除這個地點</button></div>`);
+      const pl = curPlace(); const sc = sheet(`<h2>${esc(pl.name)}</h2><div class="menu"><button data-m="edit">改名稱、時間、換積木（帶出拍攝清單）</button><button data-m="world">移到旅遊手冊 World</button><button data-m="del" class="danger">刪除這個地點</button></div>`);
       sc.onclick = ev => { const m = ev.target.closest("[data-m]"); if (!m) return;
         if (m.dataset.m === "world") { toast("下一版會做：選哪一趟、哪一天、哪個時間點"); return; }
-        if (m.dataset.m === "edit") { sc._close(); form("地點", [{ k: "name", l: "名稱", v: pl.name }, { k: "time", l: "時間", type: "time", v: pl.time }, { k: "type", l: "場景積木", opts: typeOpts(), v: pl.type }], v => { pl.name = v.name || pl.name; pl.time = v.time; if (v.type !== pl.type) { const had = pl.shots.some(s => s.clips.length); pl.type = v.type; if (!had) pl.shots = newPlace(pl.name, v.type).shots; } touch(view.pid); render(); }); }
+        if (m.dataset.m === "edit") { sc._close(); form("地點", [{ k: "name", l: "名稱", v: pl.name }, { k: "time", l: "時間", type: "time", v: pl.time }, { k: "type", l: "場景積木", opts: typeOpts(), v: pl.type }], v => { pl.name = v.name || pl.name; pl.time = v.time; if (v.type !== pl.type) { const had = pl.shots.some(s => s.clips.length); pl.type = v.type; const ns = newPlace(pl.name, v.type).shots; pl.shots = had ? pl.shots.filter(s => s.clips.length).concat(ns) : ns; } touch(view.pid); render(); }); }
         if (m.dataset.m === "del") { if (!m.dataset.c) { m.dataset.c = 1; m.textContent = "再按一次確定刪除"; return; } const d = curDay(); d.places = d.places.filter(x => x.id !== pl.id); touch(view.pid); sc._close(); go(`p/${view.pid}/${view.day}`); } };
       return;
     }
