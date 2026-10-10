@@ -263,7 +263,7 @@ function placeHTML() {
   <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
       <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
-      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
+      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
@@ -733,6 +733,41 @@ function editWB(kind, i) {
 }
 let SND = null;
 
+
+/* 雙鏡頭：用 iPhone 捷徑打開 DoubleTake，拍完回來一鍵掛上剛拍的影片 */
+const DUAL_SHORTCUT = "DoubleTake";
+function startDual(shotId) {
+  const first = !ls.get("dual-ok", false);
+  const goNow = () => { ls.set("dual-pending", { pid: view.pid, day: view.day, place: view.place, shot: shotId, at: Date.now() }); location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(DUAL_SHORTCUT); };
+  if (!first) return goNow();
+  const sc = sheet(`<h2>📸 雙鏡頭（第一次設定）</h2>
+    <p style="margin:0">前後鏡頭同時拍要用 DoubleTake。網頁不能直接打開別的 App，所以用 iPhone 的「捷徑」當橋樑，只要設定一次：</p>
+    <ol class="steps"><li>App Store 安裝 <b>DoubleTake</b>（免費），打開後選好版型：畫中畫或上下分割</li>
+    <li>打開「捷徑」App → 右上 ＋ → 加入動作 → 搜尋「打開 App」→ 選 <b>DoubleTake</b></li>
+    <li>把這個捷徑命名為 <b>${DUAL_SHORTCUT}</b>（大小寫要一樣）→ 完成</li></ol>
+    <p class="hint" style="margin:0">之後按「📸 雙鏡頭」就會直接打開 DoubleTake。拍完存到相簿，回到 WonderMedia 會跳出「掛上剛拍的影片」，點一下選它就好。</p>
+    <button class="btn primary wide" id="dgo">設定好了，打開 DoubleTake</button>`);
+  $("#dgo", sc).onclick = () => { ls.set("dual-ok", true); sc._close(); goNow(); };
+}
+function checkDual() {
+  const pd = ls.get("dual-pending", null); if (!pd) return;
+  if (Date.now() - pd.at > 60 * 60 * 1000) { ls.set("dual-pending", null); return; }
+  const p = DATA.projects[pd.pid], d = p && p.days[pd.day], pl = d && d.places.find(x => x.id === pd.place), i = pl ? pl.shots.findIndex(x => x.id === pd.shot) : -1;
+  if (i < 0 || document.querySelector(".scrim")) return;
+  const s = pl.shots[i];
+  const sc = sheet(`<h2>📸 剛拍好的雙鏡頭</h2><p class="hint" style="margin:0">${esc(pl.name)}・${pad(i + 1)} ${esc(s.n)}</p>
+    <label class="btn primary wide">從相簿選剛拍的影片<input type="file" accept="video/*" multiple class="vh" id="dfile"></label>
+    <button class="btn ghost wide" id="dlater">等一下再掛</button>`, () => {});
+  $("#dlater", sc).onclick = () => { ls.set("dual-pending", null); sc._close(); };
+  $("#dfile", sc).onchange = async e => {
+    const files = [...e.target.files]; if (!files.length) return;
+    try { let k = 0; for (const f of files) { k++; const path = `${safeName(p.title)}/D${pd.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_雙鏡頭_${stamp()}${files.length > 1 ? "-" + k : ""}.${extOf(f, f.type)}`; const c = await addClip(pd.pid, f, path, "video"); c.dual = true; s.clips.push(c); } }
+    catch (er) { toast("加不進去：" + (er && er.message || "")); return; }
+    s.done = true; ls.set("dual-pending", null); touch(pd.pid); sc._close(); go(`p/${pd.pid}/${pd.day}/${pd.place}`); render(); toast("雙鏡頭影片已掛上，上傳中"); uploadPending();
+  };
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && DATA) setTimeout(checkDual, 400); });
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -754,7 +789,7 @@ document.addEventListener("click", async e => {
     if (act === "addday") { const p = curProj(), last = p.days[p.days.length - 1], dt = new Date((last ? last.date : todayISO()) + "T00:00"); dt.setDate(dt.getDate() + (last ? 1 : 0)); p.days.push({ id: uid("d"), date: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()), title: "", places: [] }); touch(view.pid); return go(`p/${view.pid}/${p.days.length - 1}`); }
     if (act === "editday") { const d = curDay(); return form("這一天", [{ k: "title", l: "標題", v: d.title, ph: "例如：家庭聚餐" }, { k: "date", l: "日期", type: "date", v: d.date }], v => { d.title = v.title; d.date = v.date || d.date; touch(view.pid); render(); }); }
     if (act === "laugh") { const pl = curPlace(); pl.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ 已標記 " + nowHM()); }
-    if (act === "tocut") { const p = curProj(), pl = curPlace(); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}${fx ? "（" + fx + "）" : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
+    if (act === "tocut") { const p = curProj(), pl = curPlace(); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const dual = pl.shots.some(x => x.clips.some(c => c.dual)); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}${fx ? "（" + fx + "）" : ""}${dual ? "，有雙鏡頭影片" : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
     if (act === "export") { const b = new Blob([JSON.stringify(DATA, null, 1)], { type: "application/json" }); const u = URL.createObjectURL(b); const x = document.createElement("a"); x.href = u; x.download = "wondermedia-" + todayISO() + ".json"; x.click(); setTimeout(() => URL.revokeObjectURL(u), 3000); return; }
     if (act === "projmenu") {
       const p = curProj(); const sc = sheet(`<h2>${esc(p.title)}</h2><div class="menu"><button data-m="edit">編輯名稱、分類、賽道、劇本</button><button data-m="del" class="danger">刪除這個企劃</button></div>`);
@@ -781,6 +816,7 @@ document.addEventListener("click", async e => {
   const po = t.closest("[data-post]"); if (po) return editPost(po.dataset.post);
   const rb = t.closest("[data-rec]"); if (rb) return openShotRecorder(rb.dataset.rec);
   const cb = t.closest("[data-cam]"); if (cb) return openCamera(cb.dataset.cam);
+  const du = t.closest("[data-dual]"); if (du) return startDual(du.dataset.dual);
   const nb = t.closest("[data-snote]"); if (nb) return openShotNote(nb.dataset.snote);
   const vw = t.closest("[data-view]"); if (vw && !t.closest("[data-rmclip]")) return viewClip(vw.dataset.view);
   const lb = t.closest("[data-laugh]"); if (lb) { const s = curPlace().shots.find(x => x.id === lb.dataset.laugh); s.laughs = s.laughs || []; s.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ " + s.n + " 標了笑點 " + nowHM()); }
@@ -809,5 +845,5 @@ document.addEventListener("change", async e => {
   await handleRedirect();
   const c = ls.get(CACHE_KEY, null);
   if (c && c.data) { DATA = normalize(c.data); ETAG = c.eTag; DIRTY = c.dirty; } else { DATA = seedData(); DIRTY = true; writeCache(); }
-  parseHash(); render(); sync(); importInbox();
+  parseHash(); render(); sync(); importInbox(); setTimeout(checkDual, 600);
 })();
