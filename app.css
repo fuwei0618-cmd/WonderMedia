@@ -290,7 +290,7 @@ button.addclip{background:transparent;font-family:inherit}
 .camfull .recbig{margin:0}
 
 /* ---------- 記錄之流：源頭・河流・出海口 ---------- */
-.capgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.capgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .cap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:14px 4px;font-size:13px;font-weight:700;color:var(--ink);text-decoration:none;cursor:pointer;min-width:0}
 .cap b{font-size:26px;line-height:1}
 .cap.coach{background:color-mix(in srgb,var(--accent) 22%,var(--card))}

@@ -263,7 +263,7 @@ function placeHTML() {
   <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
       <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
-      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
+      <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>
@@ -457,13 +457,14 @@ function openNote(quick) {
   const p = DATA.projects[pid], pl = p.days[di].places.find(x => x.id === plid);
   const list = () => media.map((m, i) => `<span class="chip x">${m.kind === "photo" ? "📷 照片" : m.kind === "video" ? "🎬 影片" : "🎙️ 錄音"}<button data-rm="${i}" aria-label="移除">×</button></span>`).join("");
   const sc = sheet(`<h2>記一則</h2><p class="hint" style="margin:0">${esc(p.title)}・D${di + 1}・${esc(pl.name)}</p>
-    <div class="pickers"><label class="pick">📷 照片<input id="nphoto" type="file" accept="image/*" multiple class="vh"></label><label class="pick">🎬 影片<input id="nvideo" type="file" accept="video/*" multiple class="vh"></label></div>
+    <div class="pickers"><label class="pick">📷 照片<input id="nphoto" type="file" accept="image/*" multiple class="vh"></label><label class="pick">🎬 影片<input id="nvideo" type="file" accept="video/*" multiple class="vh"></label><button class="pick" id="ndual" type="button" style="grid-column:1/-1">📸 雙鏡頭（前後同時拍）</button></div>
     <div class="row" id="mlist"></div>
     ${recorderHTML()}
     <div class="field"><label for="ntext">文字</label><textarea id="ntext" placeholder="也可以按鍵盤上的麥克風口述"></textarea></div>
     <button class="btn primary wide" id="nsave">儲存</button>`, () => R && R.stopAll());
   const ta = $("#ntext", sc), refresh = () => { $("#mlist", sc).innerHTML = list(); };
   R = bindRecorder(sc, ta, b => { media.push({ kind: "audio", file: b }); refresh(); });
+  $("#ndual", sc).onclick = () => { R && R.stopAll(); sc._close(); startDual({ note: true, pid, day: di, place: plid }); };
   $("#nphoto", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "photo", file: f }); e.target.value = ""; refresh(); };
   $("#nvideo", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: "video", file: f }); e.target.value = ""; refresh(); };
   $("#mlist", sc).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { media.splice(+b.dataset.rm, 1); refresh(); } };
@@ -532,6 +533,7 @@ function srcHTML() {
     <button class="cap" data-act="cap-text"><b>✍️</b>文字</button>
     <button class="cap" data-act="cap-voice"><b>🎙️</b>語音</button>
     <label class="cap"><b>📷</b>照片<input type="file" accept="image/*,video/*" multiple class="vh" id="capphoto"></label>
+    <button class="cap" data-dual="src"><b>📸</b>雙鏡頭</button>
     <a class="cap coach" href="${COACH}"><b>🧑‍🎨</b>拍照教練</a>
   </div></section>
   <section class="section"><header><h2>剛流進來的</h2><span class="muted mono" style="font-size:13px">今天 ${todays.length} 則</span></header>
@@ -737,8 +739,8 @@ let SND = null;
 
 /* 雙鏡頭：用 iPhone 捷徑「雙鏡頭」打開 2Camera（前後同時拍），存到相簿後回來一鍵收進源頭 */
 const DUAL_SHORTCUT = "雙鏡頭";
-function startDual() {
-  const goNow = () => { ls.set("dual-pending", { src: true, at: Date.now() }); location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(DUAL_SHORTCUT); };
+function startDual(target) {
+  const goNow = () => { ls.set("dual-pending", { ...(target || { src: true }), at: Date.now() }); location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(DUAL_SHORTCUT); };
   if (ls.get("dual-ok3", false)) return goNow();
   const sc = sheet(`<h2>📸 雙鏡頭（第一次設定）</h2>
     <p style="margin:0">前後同時拍用 <b>2Camera</b>（iPhone 11 以後都能用）。網頁不能直接打開別的 App，所以借 iPhone 的「捷徑」當橋樑，只要設定一次：</p>
@@ -761,6 +763,20 @@ function checkDual() {
     $("#dfile", sc).onchange = async e => { const files = [...e.target.files]; if (!files.length) return;
       try { for (const f of files) { const id = await addRecord("video", "", [{ kind: "video", file: f }], { dual: true, tags: ["雙鏡頭"] }); (DATA.stream[id].media[0] || {}).dual = true; } } catch (er) { toast("存不進去：" + (er && er.message || "")); return; }
       ls.set("dual-pending", null); sc._close(); go("src"); render(); toast("雙鏡頭影片已流進源頭"); uploadPending(); };
+    return;
+  }
+  if (pd.note) {
+    const p = DATA.projects[pd.pid], d = p && p.days[pd.day], pl = d && d.places.find(x => x.id === pd.place);
+    if (!pl || document.querySelector(".scrim")) { if (!pl) ls.set("dual-pending", null); return; }
+    const sc = sheet(`<h2>📸 收進剛拍的雙鏡頭</h2><p class="hint" style="margin:0">${esc(p.title)}・D${pd.day + 1}・${esc(pl.name)}・隨手記</p>
+      <label class="btn primary wide">從相簿選剛拍的影片<input type="file" accept="video/*" multiple class="vh" id="dfile"></label>
+      <button class="btn ghost wide" id="dlater">先不要</button>`, () => {});
+    $("#dlater", sc).onclick = () => { ls.set("dual-pending", null); sc._close(); };
+    $("#dfile", sc).onchange = async e => { const files = [...e.target.files]; if (!files.length) return;
+      const n = { id: uid("n"), ts: Date.now(), text: "", media: [] };
+      try { let k = 0; for (const f of files) { k++; const path = `${safeName(p.title)}/D${pd.day + 1}_${safeName(pl.name)}_隨手記_雙鏡頭_${stamp()}-${k}.${extOf(f, f.type)}`; const c = await addClip(pd.pid, f, path, "video"); c.dual = true; n.media.push(c); } }
+      catch (er) { toast("加不進去：" + (er && er.message || "")); return; }
+      pl.notes.push(n); ls.set("dual-pending", null); touch(pd.pid); sc._close(); go(`p/${pd.pid}/${pd.day}/${pd.place}`); render(); toast("雙鏡頭影片已加進隨手記"); uploadPending(); };
     return;
   }
   const p = DATA.projects[pd.pid], d = p && p.days[pd.day], pl = d && d.places.find(x => x.id === pd.place), i = pl ? pl.shots.findIndex(x => x.id === pd.shot) : -1;
@@ -827,7 +843,7 @@ document.addEventListener("click", async e => {
   const po = t.closest("[data-post]"); if (po) return editPost(po.dataset.post);
   const rb = t.closest("[data-rec]"); if (rb) return openShotRecorder(rb.dataset.rec);
   const cb = t.closest("[data-cam]"); if (cb) return openCamera(cb.dataset.cam);
-  const du = t.closest("[data-dual]"); if (du) return startDual(du.dataset.dual);
+  const du = t.closest("[data-dual]"); if (du) return startDual(du.dataset.dual === "src" ? { src: true } : { pid: view.pid, day: view.day, place: view.place, shot: du.dataset.dual });
   const nb = t.closest("[data-snote]"); if (nb) return openShotNote(nb.dataset.snote);
   const vw = t.closest("[data-view]"); if (vw && !t.closest("[data-rmclip]")) return viewClip(vw.dataset.view);
   const lb = t.closest("[data-laugh]"); if (lb) { const s = curPlace().shots.find(x => x.id === lb.dataset.laugh); s.laughs = s.laughs || []; s.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ " + s.n + " 標了笑點 " + nowHM()); }
