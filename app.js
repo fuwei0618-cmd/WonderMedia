@@ -292,6 +292,7 @@ function settingsHTML() {
     ${signedIn() ? `<div class="banner ok"><span>已登入，影片會傳到 OneDrive／應用程式／Origina／WonderMedia</span></div><button class="btn" data-act="sync">立即同步</button><button class="btn danger" data-act="logout">登出</button>`
       : `<p class="hint" style="margin:0">登入後：手機拍的影片會自動傳到 OneDrive，電腦同步下來，Claude 就能直接剪。沒登入也能用，影片先存在這支手機。</p><button class="btn primary" data-act="login">登入 OneDrive</button>`}
   </div></section>
+  <section class="section"><h2>Claude 對話</h2><div class="card stack"><p class="hint" style="margin:0">按「幫我剪」會複製句子並打開這個對話，貼上就送出。換了對話就把新的網址貼進來。</p><input id="claudeurl" value="${esc(claudeURL())}" aria-label="WonderMedia 對話網址"></div></section>
   <section class="section"><h2>備份</h2><div class="card stack"><button class="btn" data-act="export">匯出全部紀錄（JSON）</button><p class="hint" style="margin:0">影片不在備份檔裡，影片在 OneDrive。</p></div></section>`;
 }
 
@@ -843,6 +844,18 @@ function quickShot(name) {
 }
 document.addEventListener("keydown", e => { if (e.target && e.target.id === "qshot" && e.key === "Enter") { e.preventDefault(); quickShot(e.target.value); } });
 
+
+/* 幫我剪：複製句子＋直接打開 WonderMedia 的 Claude 對話 */
+const CLAUDE_DEFAULT = "https://claude.ai/code/session_01T4rm6ATHXGLsQ8mN82MsVi";
+const claudeURL = () => ls.get("claude-url", "") || CLAUDE_DEFAULT;
+async function sendToClaude(txt) {
+  let ok = false; try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {}
+  const sc = sheet(`<h2>📋 交給 Claude 剪</h2><p style="margin:0;padding:10px 12px;background:var(--soft);border-radius:10px;user-select:all">${esc(txt)}</p>
+    <p class="hint" style="margin:0">${ok ? "已複製。打開對話後，在輸入框長按 →「貼上」→ 送出。" : "先長按上面的字複製，再打開對話貼上。"}</p>
+    <a class="btn primary wide" href="${esc(claudeURL())}" id="goclaude">打開 WonderMedia 對話</a>`);
+  $("#goclaude", sc).onclick = () => setTimeout(() => sc._close(), 300);
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -861,12 +874,12 @@ document.addEventListener("click", async e => {
     if (act === "cap-text") return openCapture("text");
     if (act === "cap-voice") return openCapture("voice");
     if (act === "newpost") return editPost(null);
-    if (act === "cutpicks") { const ps = riverItems().filter(x => x.o.pick); const ds = [...new Set(ps.map(x => dateOf(x.ts)))].sort(); const tg = [...new Set(ps.flatMap(x => x.o.tags || []))]; const txt = `幫我剪：河流挑選的 ${ps.length} 則（${ds.map(md).join("、")}）${tg.length ? "，標籤 " + tg.map(g => "#" + g).join(" ") : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
+    if (act === "cutpicks") { const ps = riverItems().filter(x => x.o.pick); const ds = [...new Set(ps.map(x => dateOf(x.ts)))].sort(); const tg = [...new Set(ps.flatMap(x => x.o.tags || []))]; const txt = `幫我剪：河流挑選的 ${ps.length} 則（${ds.map(md).join("、")}）${tg.length ? "，標籤 " + tg.map(g => "#" + g).join(" ") : ""}`; return sendToClaude(txt); return; }
     if (act === "editshots") return editShots();
     if (act === "addday") { const p = curProj(), last = p.days[p.days.length - 1], dt = new Date((last ? last.date : todayISO()) + "T00:00"); dt.setDate(dt.getDate() + (last ? 1 : 0)); p.days.push({ id: uid("d"), date: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()), title: "", places: [] }); touch(view.pid); return go(`p/${view.pid}/${p.days.length - 1}`); }
     if (act === "editday") { const d = curDay(); return form("這一天", [{ k: "title", l: "標題", v: d.title, ph: "例如：家庭聚餐" }, { k: "date", l: "日期", type: "date", v: d.date }], v => { d.title = v.title; d.date = v.date || d.date; touch(view.pid); render(); }); }
     if (act === "laugh") { const pl = curPlace(); pl.laughs.push({ ts: Date.now(), at: nowHM() }); touch(view.pid); render(); return toast("⭐ 已標記 " + nowHM()); }
-    if (act === "tocut") { const p = curProj(), pl = curPlace(); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const dual = pl.shots.some(x => x.clips.some(c => c.dual)); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}${fx ? "（" + fx + "）" : ""}${dual ? "，有雙鏡頭影片" : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
+    if (act === "tocut") { const p = curProj(), pl = curPlace(); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const dual = pl.shots.some(x => x.clips.some(c => c.dual)); const txt = `幫我剪：${p.title}／D${view.day + 1}／${pl.name}${fx ? "（" + fx + "）" : ""}${dual ? "，有雙鏡頭影片" : ""}`; return sendToClaude(txt); return; }
     if (act === "export") { const b = new Blob([JSON.stringify(DATA, null, 1)], { type: "application/json" }); const u = URL.createObjectURL(b); const x = document.createElement("a"); x.href = u; x.download = "wondermedia-" + todayISO() + ".json"; x.click(); setTimeout(() => URL.revokeObjectURL(u), 3000); return; }
     if (act === "projmenu") {
       const p = curProj(); const sc = sheet(`<h2>${esc(p.title)}</h2><div class="menu"><button data-m="edit">編輯名稱、分類、賽道、劇本</button><button data-m="del" class="danger">刪除這個企劃</button></div>`);
@@ -915,6 +928,7 @@ document.addEventListener("change", async e => {
     } catch (er) { toast("加不進去：" + (er && er.message || "請從主畫面的 WonderMedia 開啟")); return; }
     s.done = true; touch(view.pid); render(); toast(signedIn() ? "已加入，上傳中" : "已存在手機，登入 OneDrive 後上傳"); uploadPending(); return;
   }
+  if (t.id === "claudeurl") { const v = t.value.trim(); ls.set("claude-url", /^https:\/\/claude\.ai\//.test(v) ? v : ""); toast(/^https:\/\/claude\.ai\//.test(v) ? "已儲存對話網址" : "要是 claude.ai 開頭的網址，已改回預設"); return; }
   if (t.dataset.f && t.tagName === "INPUT") { curPlace().info[t.dataset.f] = t.value.trim(); touch(view.pid); }
 });
 
