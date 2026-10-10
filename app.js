@@ -222,7 +222,7 @@ function homeHTML() {
   ${syncBanner()}
   <section class="section"><header><h2>⭐ 從河流挑的素材</h2><span class="muted mono" style="font-size:13px">${picks.length} 則</span></header>
     <div class="card">${picks.length ? `<div class="pickrow">${picks.slice(0, 12).map(x => thumbHTML(x)).join("")}</div><button class="btn primary wide" data-act="cutpicks" style="margin-top:12px">📋 複製「幫我剪：河流挑選」</button>` : `<p class="hint">在河流裡按 ☆ 挑選，挑好的會出現在這裡。</p>`}</div></section>
-  <section class="section"><header><h2>拍攝企劃</h2><button class="btn sm ghost" data-act="newproj">＋ 完整企劃</button></header>
+  <section class="section"><header><h2>拍攝企劃</h2><span class="row" style="gap:6px"><button class="btn sm ghost" data-act="fromworld">🌏 從 World 帶入</button><button class="btn sm ghost" data-act="newproj">＋ 完整企劃</button></span></header>
   <div class="stack">${ps.length ? ps.map(p => { const pls = p.days.flatMap(d => d.places); const tot = pls.reduce((a, pl) => a + pl.shots.length, 0), done = pls.reduce((a, pl) => a + progress(pl).d, 0);
     return `<button class="card pcard" data-go="p/${p.id}/0"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.tag)}</span><span class="mono muted" style="font-size:12px">${md((p.days[0] || {}).date)}${p.days.length > 1 ? " 起 " + p.days.length + " 天" : ""}</span></div>
       <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted" style="font-size:13px;margin-top:4px">${pls.map(x => esc(x.name)).join("・") || "還沒有地點"}</div>
@@ -889,6 +889,25 @@ document.addEventListener("drop", async e => {
   s.done = true; touch(view.pid); render(); toast(`${files.length} 個檔案已掛到「${s.n}」，上傳中`); uploadPending();
 });
 
+
+/* 從 World 帶入行程：讀 OneDrive／Origina／World／data.json 的行程（沒登入就用 World 的重慶範例），一鍵變成企劃→天→地點 */
+function guessType(t) { return /航班|NX\d|機場|出發|入境|接機|回航|索道|輕軌|高鐵|車站|移動/.test(t) ? "move" : /宴|餐|吃|火鍋|小吃|早餐|午餐|晚餐|咖啡|茶/.test(t) ? "food" : /酒店|飯店|民宿|入住|退房/.test(t) ? "stay" : /酒吧|夜/.test(t) ? "night" : "play"; }
+async function fromWorld() {
+  let trips = [];
+  if (signedIn()) { try { const r = await gfetch("/me/drive/special/approot:/World/data.json:/content"); if (r && r.ok) { const j = await r.json(); trips = (j.data || j).trips || []; } } catch (e) {} }
+  if (!trips.length) { try { trips = [await (await fetch("/World/samples/chongqing-2026.json", { cache: "no-store" })).json()]; } catch (e) {} }
+  trips = trips.filter(t => t && (t.days || []).length);
+  if (!trips.length) return toast("找不到 World 的行程，先登入 OneDrive 再試");
+  const sc = sheet(`<h2>🌏 從 World 帶入行程</h2><p class="hint" style="margin:0">選一趟旅行，會照天數和行程建好企劃和地點，拍攝清單照地點類型自動帶出。${signedIn() ? "" : "（還沒登入 OneDrive，先顯示 World 的重慶範例）"}</p>
+    <div class="stack">${trips.map((t, i) => `<button class="card post" data-tw="${i}"><b>${esc(t.title)}</b><div class="muted mono" style="font-size:12px">${esc(md(t.start))}～${esc(md(t.end))}・${t.days.length} 天</div></button>`).join("")}</div>`);
+  sc.onclick = e => {
+    const b = e.target.closest("[data-tw]"); if (!b) return; const t = trips[+b.dataset.tw];
+    const days = t.days.map(d => ({ id: uid("d"), date: d.date, title: d.title || "", places: (d.items || d.stops || d.places || []).map(it => newPlace((it.title || it.name || "地點").slice(0, 30), guessType((it.title || "") + " " + (it.desc || "")), it.time || "")) }));
+    const id = uid("p"); DATA.projects[id] = { title: t.title, tag: "旅行", style: "", tpl: "旅行 Vlog", createdAt: todayISO(), world: t.id || "", days, _u: Date.now() };
+    touch(id); sc._close(); go("p/" + id + "/0"); toast(`已建立：${t.days.length} 天、${days.reduce((a, d) => a + d.places.length, 0)} 個地點`);
+  };
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -900,6 +919,7 @@ document.addEventListener("click", async e => {
     if (act === "sync") { await sync(); return toast(SYNC === "ok" ? "已同步" : "同步沒成功"); }
     if (act === "newproj") return newProject();
     if (act === "quickgo") return quickGo();
+    if (act === "fromworld") return fromWorld();
     if (act === "cutday") { const p = curProj(), di = Math.min(view.day, p.days.length - 1), d = p.days[di], sm = projSummary(p, di); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); return sendToClaude(`幫我剪：${p.title}／D${di + 1}${d.title ? " " + d.title : ""}（${sm}）${fx ? "，" + fx : ""}。地點：${d.places.map(x => x.name).join("、") || "—"}`); }
     if (act === "cutproj") { const p = curProj(), sm = projSummary(p); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const where = p.days.map((d, i) => `D${i + 1} ` + (d.places.map(x => x.name).join("、") || "—")).join("；"); return sendToClaude(`幫我剪整個企劃：${p.title}（${sm}）${fx ? "，" + fx : ""}。地點：${where}`); }
     if (act === "qshot") return quickShot(($("#qshot") || {}).value);
