@@ -1,6 +1,7 @@
-/* WonderMedia — 小瑋的拍攝記錄 App
-   企劃 → 天 → 地點（場景積木）→ 拍攝清單／紀錄欄位／記一則／笑點
-   資料：裝置上先存（不怕沒網路），登入 OneDrive 後同步；影片用好剪的檔名上傳到 OneDrive。 */
+/* WonderMedia — 小瑋的記錄之流
+   源頭（隨手記文字／語音／照片、拍照教練）→ 河流（所有紀錄依時間流下、標籤、挑選）
+   → 工作台（企劃 → 天 → 地點積木、剪映草稿流程）→ 出海口（發布與成效）
+   資料：裝置上先存（不怕沒網路），登入 OneDrive 後同步；檔案用好剪的檔名上傳到 OneDrive。 */
 "use strict";
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -48,7 +49,7 @@ function blocks() { const c = (DATA && DATA.docs && DATA.docs.blocks) || {}; con
 /* ---------- 資料（同 Lucky：一個 JSON，裝置快取＋OneDrive 同步） ---------- */
 let DATA = null, ETAG = null, DIRTY = false;
 const CACHE_KEY = "cache";
-function emptyData() { return { v: 1, projects: {}, docs: {}, deleted: {} }; }
+function emptyData() { return { v: 1, projects: {}, docs: {}, deleted: {}, stream: {}, posts: {} }; }
 function seedData() {
   const d = emptyData(), sat = nextSaturday();
   const pl = newPlace("鰻天下", "food", "12:00");
@@ -57,7 +58,7 @@ function seedData() {
 }
 function nextSaturday() { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
 function newPlace(name, type, time) { return { id: uid("pl"), name, type, time: time || "", info: {}, shots: blocks()[type].shots.map(s => ({ id: uid("s"), ...s, done: false, clips: [] })), notes: [], laughs: [] }; }
-function normalize(d) { d = d || emptyData(); d.projects = d.projects || {}; d.docs = d.docs || {}; d.deleted = d.deleted || {}; return d; }
+function normalize(d) { d = d || emptyData(); d.projects = d.projects || {}; d.docs = d.docs || {}; d.deleted = d.deleted || {}; d.stream = d.stream || {}; d.posts = d.posts || {}; return d; }
 function merge(a, b) {
   a = normalize(a); b = normalize(b); const out = emptyData();
   for (const k of new Set([...Object.keys(a.deleted), ...Object.keys(b.deleted)])) out.deleted[k] = Math.max(a.deleted[k] || 0, b.deleted[k] || 0);
@@ -66,10 +67,15 @@ function merge(a, b) {
     if ((out.deleted["p/" + id] || 0) >= (r._u || 0)) continue; out.projects[id] = r;
   }
   for (const k of new Set([...Object.keys(a.docs), ...Object.keys(b.docs)])) { const x = a.docs[k], y = b.docs[k]; out.docs[k] = !x ? y : !y ? x : ((y._u || 0) > (x._u || 0) ? y : x); }
+  for (const [box, pre] of [["stream", "s/"], ["posts", "o/"]]) for (const id of new Set([...Object.keys(a[box]), ...Object.keys(b[box])])) {
+    const x = a[box][id], y = b[box][id]; const r = !x ? y : !y ? x : ((y._u || 0) > (x._u || 0) ? y : x);
+    if ((out.deleted[pre + id] || 0) >= (r._u || 0)) continue; out[box][id] = r;
+  }
   return out;
 }
 function writeCache() { ls.set(CACHE_KEY, { data: DATA, eTag: ETAG, dirty: DIRTY }); }
 function touch(pid) { if (pid && DATA.projects[pid]) DATA.projects[pid]._u = Date.now(); DIRTY = true; writeCache(); scheduleSync(); }
+function touchRec(r) { r._u = Date.now(); DIRTY = true; writeCache(); scheduleSync(); }
 function saveBlocks(type, shots) { DATA.docs.blocks = DATA.docs.blocks || { _u: 0 }; DATA.docs.blocks[type] = { shots: shots.map(s => ({ n: s.n, h: s.h, sec: s.sec })) }; DATA.docs.blocks._u = Date.now(); DIRTY = true; writeCache(); scheduleSync(); }
 
 /* ---------- 影片先存在手機（IndexedDB），有網路再上傳 ---------- */
@@ -133,7 +139,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 /* 上傳：OneDrive/應用程式/Origina/WonderMedia/<企劃>/D1_鰻天下_02_店內環境_1010-1215.mp4 */
 let uploading = false;
-function allClips() { const out = []; for (const pid in DATA.projects) { const p = DATA.projects[pid]; p.days.forEach(d => d.places.forEach(pl => { pl.shots.forEach(s => s.clips.forEach(c => out.push({ p, pid, c }))); pl.notes.forEach(n => (n.media || []).forEach(c => out.push({ p, pid, c }))); })); } return out; }
+function allClips() { const out = []; for (const pid in DATA.projects) { const p = DATA.projects[pid]; p.days.forEach(d => d.places.forEach(pl => { pl.shots.forEach(s => s.clips.forEach(c => out.push({ p, pid, c }))); pl.notes.forEach(n => (n.media || []).forEach(c => out.push({ p, pid, c }))); })); } for (const id in DATA.stream) (DATA.stream[id].media || []).forEach(c => out.push({ p: null, pid: null, c, rec: DATA.stream[id] })); return out; }
 async function uploadPending() {
   if (uploading || !signedIn() || !navigator.onLine) return; uploading = true;
   try {
@@ -147,7 +153,7 @@ async function uploadPending() {
         const { uploadUrl } = await r.json(); const CH = 320 * 1024 * 16; let start = 0;
         while (start < f.size) { const end = Math.min(start + CH, f.size); const rr = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Range": "bytes " + start + "-" + (end - 1) + "/" + f.size }, body: f.slice(start, end) }); if (rr.status === 200 || rr.status === 201) { item = await rr.json(); break; } if (rr.status !== 202) throw 0; start = end; c.pct = Math.round(end / f.size * 100); render(); }
       }
-      if (item && item.id) { c.od = item.id; delete c.pct; touch(pid); await IDB.del(c.key); render(); }
+      if (item && item.id) { c.od = item.id; delete c.pct; if (pid) touch(pid); else { const r = Object.values(DATA.stream).find(x => (x.media || []).includes(c)); r ? touchRec(r) : touch(null); } await IDB.del(c.key); render(); }
     }
   } catch (e) { toast("有影片還沒上傳完，連上 Wi-Fi 會自動繼續"); }
   uploading = false; render();
@@ -159,48 +165,60 @@ async function addClip(pid, file, path, kind) {
 }
 
 /* ---------- 畫面 ---------- */
-const view = { tab: "home", pid: null, day: 0, place: null };
+const view = { tab: "src", pid: null, day: 0, place: null };
 function go(hash) { location.hash = hash; }
 function parseHash() {
   const h = decodeURIComponent(location.hash.slice(1)).split("/");
-  view.tab = h[0] || "home"; view.pid = h[1] || null; view.day = Number(h[2] || 0); view.place = h[3] || null;
+  view.tab = h[0] || "src"; view.pid = h[1] || null; view.day = Number(h[2] || 0); view.place = h[3] || null;
 }
 addEventListener("hashchange", () => { parseHash(); render(); scrollTo(0, 0); });
 
 function syncBanner() {
   if (SYNC === "ok") { const n = allClips().filter(x => !x.c.od).length; return n ? `<div class="banner"><span>⬆️ ${n} 段影片上傳中…</span></div>` : ""; }
-  if (SYNC === "expired" || !signedIn()) return `<div class="banner"><span>先存在這支手機。登入 OneDrive 後，影片才會傳到電腦給 Claude 剪。</span><button class="btn sm primary" data-act="login">登入</button></div>`;
+  if (SYNC === "expired" || !signedIn()) return `<div class="banner"><span>先存在這支手機。登入 OneDrive 後，紀錄和影片才會傳到電腦給 Claude 剪。</span><button class="btn sm primary" data-act="login">登入</button></div>`;
   if (SYNC === "offline") return `<div class="banner"><span>目前沒網路，先存在手機，連上會自動上傳</span></div>`;
   return "";
 }
 function render() {
   if (!DATA) return;
   const app = $("#app");
-  if (view.tab === "blocks") app.innerHTML = blocksHTML();
+  if (view.tab === "src") app.innerHTML = srcHTML();
+  else if (view.tab === "river") app.innerHTML = riverHTML();
+  else if (view.tab === "sea") app.innerHTML = seaHTML();
+  else if (view.tab === "blocks") app.innerHTML = blocksHTML();
   else if (view.tab === "set") app.innerHTML = settingsHTML();
   else if (view.tab === "p" && view.place && DATA.projects[view.pid]) app.innerHTML = placeHTML();
   else if (view.tab === "p" && DATA.projects[view.pid]) app.innerHTML = projectHTML();
   else app.innerHTML = homeHTML();
   $("#tabs").innerHTML = tabsHTML();
+  fillThumbs();
 }
 const ICON = {
+  src: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3 4 5 6.6 5 9.5A5 5 0 0 1 7 12.5C7 9.6 9 7 12 3z"/></svg>',
+  river: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7c3-2 6 2 9 0s6-2 9 0M3 12c3-2 6 2 9 0s6-2 9 0M3 17c3-2 6 2 9 0s6-2 9 0"/></svg>',
+  sea: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18c2 1.5 4 1.5 6 0s4-1.5 6 0 4 1.5 6 0M12 3v10M8 9l4 4 4-4"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>',
   blocks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>',
   set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>'
 };
 function tabsHTML() {
-  const cur = view.tab === "p" ? "home" : view.tab;
-  return `<button data-go="home" aria-current="${cur === "home"}">${ICON.home}企劃</button>
-    <button class="rec" data-act="quick" aria-label="記一則"><span class="dot"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></span></button>
-    <button data-go="blocks" aria-current="${cur === "blocks"}">${ICON.blocks}積木</button>
-    <button data-go="set" aria-current="${cur === "set"}">${ICON.set}設定</button>`;
+  const cur = view.tab === "p" || view.tab === "home" || view.tab === "blocks" ? "work" : view.tab === "set" ? "src" : view.tab;
+  return `<button data-go="src" aria-current="${cur === "src"}">${ICON.src}源頭</button>
+    <button data-go="river" aria-current="${cur === "river"}">${ICON.river}河流</button>
+    <button class="rec" data-act="capture" aria-label="隨手記"><span class="dot"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span></button>
+    <button data-go="home" aria-current="${cur === "work"}">${ICON.home}工作台</button>
+    <button data-go="sea" aria-current="${cur === "sea"}">${ICON.sea}出海口</button>`;
 }
 function laughCount(pl) { return (pl.laughs || []).length + pl.shots.reduce((a, s) => a + (s.laughs || []).length, 0); }
 function progress(pl) { const n = pl.shots.length, d = pl.shots.filter(s => s.done || s.clips.length).length; return { n, d }; }
 function homeHTML() {
   const ps = Object.entries(DATA.projects).map(([id, p]) => ({ id, ...p })).sort((a, b) => ((b.days[0] || {}).date || "").localeCompare((a.days[0] || {}).date || ""));
-  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">WonderMedia</h1></div>
+  const picks = riverItems().filter(x => x.o.pick);
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1><button class="btn sm ghost" data-go="blocks">場景積木</button></div>
+  <p class="hint">從河流挑好的素材和拍攝企劃都在這裡，準備好就複製一句話給 Claude 剪。</p>
   ${syncBanner()}
+  <section class="section"><header><h2>⭐ 從河流挑的素材</h2><span class="muted mono" style="font-size:13px">${picks.length} 則</span></header>
+    <div class="card">${picks.length ? `<div class="pickrow">${picks.slice(0, 12).map(x => thumbHTML(x)).join("")}</div><button class="btn primary wide" data-act="cutpicks" style="margin-top:12px">📋 複製「幫我剪：河流挑選」</button>` : `<p class="hint">在河流裡按 ☆ 挑選，挑好的會出現在這裡。</p>`}</div></section>
   <section class="section"><header><h2>拍攝企劃</h2><button class="btn sm primary" data-act="newproj">＋ 新企劃</button></header>
   <div class="stack">${ps.length ? ps.map(p => { const pls = p.days.flatMap(d => d.places); const tot = pls.reduce((a, pl) => a + pl.shots.length, 0), done = pls.reduce((a, pl) => a + progress(pl).d, 0);
     return `<button class="card pcard" data-go="p/${p.id}/0"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.tag)}</span><span class="mono muted" style="font-size:12px">${md((p.days[0] || {}).date)}${p.days.length > 1 ? " 起 " + p.days.length + " 天" : ""}</span></div>
@@ -253,14 +271,14 @@ function placeHTML() {
 }
 function blocksHTML() {
   const B = blocks();
-  return `<div class="top"><h1 style="font-size:20px">場景積木</h1></div>
+  return `<div class="top"><button class="icon-btn" data-go="home" aria-label="返回">‹</button><h1 style="font-size:20px">場景積木</h1></div>
   <p class="hint">新增地點時選一塊，拍攝清單就自動帶出。在地點裡改過鏡頭，可以按「存成這塊積木的預設」。</p>
   <section class="section"><div class="card">${Object.entries(B).map(([k, b]) => `<details class="blk"><summary class="row" style="cursor:pointer"><span class="chip type ${b.cls}">${esc(b.name)}</span><span class="muted" style="font-size:13px">${b.shots.length} 個鏡頭</span></summary>
     <ol style="margin:8px 0 0;padding-left:22px;font-size:14px">${b.shots.map(s => `<li>${esc(s.n)}${s.h ? `<span class="muted">｜${esc(s.h)}</span>` : ""}</li>`).join("") || "<li class='muted'>自由拍</li>"}</ol>
     <p class="hint" style="margin-top:6px">紀錄欄位：${b.fields.map(f => esc(f.l)).join("、")}</p></details>`).join("")}</div></section>`;
 }
 function settingsHTML() {
-  return `<div class="top"><h1 style="font-size:20px">設定</h1></div>
+  return `<div class="top"><button class="icon-btn" data-go="src" aria-label="返回">‹</button><h1 style="font-size:20px">設定</h1></div>
   <section class="section"><h2>OneDrive</h2><div class="card stack">
     ${signedIn() ? `<div class="banner ok"><span>已登入，影片會傳到 OneDrive／應用程式／Origina／WonderMedia</span></div><button class="btn" data-act="sync">立即同步</button><button class="btn danger" data-act="logout">登出</button>`
       : `<p class="hint" style="margin:0">登入後：手機拍的影片會自動傳到 OneDrive，電腦同步下來，Claude 就能直接剪。沒登入也能用，影片先存在這支手機。</p><button class="btn primary" data-act="login">登入 OneDrive</button>`}
@@ -348,7 +366,7 @@ function openShotNote(shotId) {
   $("#sns", sc).onclick = () => { s.note = $("#snt", sc).value.trim(); touch(view.pid); sc._close(); render(); toast("已儲存"); };
 }
 /* 預覽已加入的影片／照片／錄音 */
-function findClip(key) { for (const pid in DATA.projects) for (const d of DATA.projects[pid].days) for (const pl of d.places) { for (const s of pl.shots) { const c = s.clips.find(x => x.key === key); if (c) return { c, label: s.n }; } for (const n of pl.notes) { const c = (n.media || []).find(x => x.key === key); if (c) return { c, label: "隨手記" }; } } return null; }
+function findClip(key) { for (const pid in DATA.projects) for (const d of DATA.projects[pid].days) for (const pl of d.places) { for (const s of pl.shots) { const c = s.clips.find(x => x.key === key); if (c) return { c, label: s.n }; } for (const n of pl.notes) { const c = (n.media || []).find(x => x.key === key); if (c) return { c, label: "隨手記" }; } } for (const id in DATA.stream) { const c = (DATA.stream[id].media || []).find(x => x.key === key); if (c) return { c, label: "源頭" }; } return null; }
 async function viewClip(key) {
   const f = findClip(key); if (!f) return; const c = f.c; let url = null, revoke = false;
   const local = await IDB.get(key);
@@ -448,6 +466,181 @@ function openNote(quick) {
   };
 }
 
+
+/* ---------- 記錄之流：源頭・河流・出海口 ---------- */
+const COACH = "https://fuwei0618-cmd.github.io/Entry/coach/?return=" + encodeURIComponent("https://fuwei0618-cmd.github.io/WonderMedia/#src");
+const PLATFORMS = ["IG", "YouTube", "小紅書", "Threads"];
+const dateOf = ts => { const d = new Date(ts); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+const hmOf = ts => { const d = new Date(ts); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+const stampOf = ts => { const d = new Date(ts); return pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()); };
+const recKind = r => r.kind || ((r.media || [])[0] || {}).kind || "text";
+const KIND_LABEL = { text: "文字", audio: "語音", photo: "照片", video: "影片" };
+
+/* 河流：源頭紀錄＋各企劃裡的鏡頭與隨手記，依時間排 */
+function riverItems() {
+  const out = [];
+  for (const id in DATA.stream) { const r = DATA.stream[id]; out.push({ type: "rec", id, ts: r.ts, kind: recKind(r), text: r.text || "", media: r.media || [], o: r, where: r.src === "coach" ? "拍照教練" + (r.scene ? "・" + r.scene : "") : "源頭" }); }
+  for (const pid in DATA.projects) { const p = DATA.projects[pid];
+    p.days.forEach((d, di) => d.places.forEach(pl => {
+      pl.shots.forEach(s => s.clips.forEach(c => out.push({ type: "clip", pid, ts: c.at || Date.parse(d.date), kind: c.kind, text: c.text || s.n, media: [c], o: c, where: p.title + "・" + pl.name, go: `p/${pid}/${di}/${pl.id}` })));
+      pl.notes.forEach(n => out.push({ type: "note", pid, ts: n.ts, kind: ((n.media || [])[0] || {}).kind || "text", text: n.text || "", media: n.media || [], o: n, where: p.title + "・" + pl.name, go: `p/${pid}/${di}/${pl.id}` }));
+    }));
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
+function saveItem(x) { if (x.type === "rec") touchRec(x.o); else touch(x.pid); }
+function findItem(k) { return riverItems().find(x => itemKey(x) === k); }
+const itemKey = x => x.type === "rec" ? "r:" + x.id : x.type === "note" ? "n:" + x.o.id : "c:" + x.o.key;
+function thumbHTML(x) {
+  const m = (x.media || []).find(c => c.kind === "photo" || c.kind === "video");
+  if (m) return `<span class="thumb" data-item="${esc(itemKey(x))}"><img alt="" data-thumb="${m.key}">${m.kind === "video" ? "<i>▶</i>" : ""}</span>`;
+  return `<span class="thumb txt" data-item="${esc(itemKey(x))}">${x.kind === "audio" ? "🎙️" : "✍️"}</span>`;
+}
+const THUMB = new Map();
+async function fillThumbs() {
+  for (const img of document.querySelectorAll("img[data-thumb]")) {
+    const k = img.dataset.thumb; if (THUMB.has(k)) { if (THUMB.get(k)) img.src = THUMB.get(k); continue; }
+    THUMB.set(k, "");
+    (async () => {
+      let url = "";
+      try { const loc = await IDB.get(k); if (loc && loc.blob) url = URL.createObjectURL(loc.blob);
+        else { const f = findClip(k); if (f && f.c.od && signedIn()) { const r = await gfetch("/me/drive/items/" + encodeURIComponent(f.c.od) + "/thumbnails/0/medium/content"); if (r && r.ok) url = URL.createObjectURL(await r.blob()); } } } catch (e) {}
+      THUMB.set(k, url); if (url) document.querySelectorAll(`img[data-thumb="${k}"]`).forEach(i => i.src = url);
+    })();
+  }
+}
+function allTags() { const t = new Set(); riverItems().forEach(x => (x.o.tags || []).forEach(g => t.add(g))); return [...t]; }
+
+function srcHTML() {
+  const recs = Object.entries(DATA.stream).map(([id, r]) => ({ id, ...r })).sort((a, b) => b.ts - a.ts);
+  const today = todayISO(), todays = recs.filter(r => dateOf(r.ts) === today);
+  const items = riverItems().filter(x => x.type === "rec").slice(0, 20);
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">源頭</h1><button class="icon-btn" data-go="set" aria-label="設定">⚙︎</button></div>
+  <p class="hint">想到什麼先丟進來，之後在河流裡整理、挑選。</p>
+  ${syncBanner()}
+  <section class="section"><div class="capgrid">
+    <button class="cap" data-act="cap-text"><b>✍️</b>文字</button>
+    <button class="cap" data-act="cap-voice"><b>🎙️</b>語音</button>
+    <label class="cap"><b>📷</b>照片<input type="file" accept="image/*,video/*" multiple class="vh" id="capphoto"></label>
+    <a class="cap coach" href="${COACH}"><b>🧑‍🎨</b>拍照教練</a>
+  </div></section>
+  <section class="section"><header><h2>剛流進來的</h2><span class="muted mono" style="font-size:13px">今天 ${todays.length} 則</span></header>
+    ${items.length ? `<div class="stack">${items.map(itemHTML).join("")}</div><button class="btn ghost wide" data-go="river">看整條河流 ›</button>` : `<div class="card empty"><b>源頭還是空的</b>按上面的按鈕，或下面中間的 ＋ 記第一則</div>`}</section>`;
+}
+function itemHTML(x) {
+  const tags = (x.o.tags || []).map(g => `<span class="chip">#${esc(g)}</span>`).join("");
+  const scene = x.o.pose ? `<span class="chip">${esc(x.o.pose)}</span>` : "";
+  return `<div class="ritem card">${thumbHTML(x)}<div class="rbody" data-item="${esc(itemKey(x))}"><div class="rmeta"><span class="mono">${hmOf(x.ts)}</span><span>${KIND_LABEL[x.kind] || ""}</span><span class="muted">${esc(x.where)}</span></div>
+    ${x.text ? `<p class="rtext">${esc(x.text)}</p>` : ""}<div class="row" style="gap:4px">${scene}${tags}</div></div>
+    <button class="pick ${x.o.pick ? "on" : ""}" data-pick="${esc(itemKey(x))}" aria-label="${x.o.pick ? "取消挑選" : "挑選"}">${x.o.pick ? "★" : "☆"}</button></div>`;
+}
+const RF = { tag: "", pick: false };
+function riverHTML() {
+  let xs = riverItems(); const tags = allTags();
+  if (RF.pick) xs = xs.filter(x => x.o.pick); if (RF.tag) xs = xs.filter(x => (x.o.tags || []).includes(RF.tag));
+  const days = []; xs.forEach(x => { const d = dateOf(x.ts); if (!days.length || days[days.length - 1].d !== d) days.push({ d, xs: [] }); days[days.length - 1].xs.push(x); });
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">河流</h1><span class="muted mono" style="font-size:13px">${xs.length} 則</span></div>
+  <p class="hint">所有紀錄依時間流下來。按 ☆ 挑選，點一則可以加標籤；挑好的會在工作台等著剪。</p>
+  <div class="rfilters"><button data-rf="" aria-pressed="${!RF.tag && !RF.pick}">全部</button><button data-rf="★" aria-pressed="${RF.pick}">★ 已挑</button>${tags.map(g => `<button data-rf="#${esc(g)}" aria-pressed="${RF.tag === g}">#${esc(g)}</button>`).join("")}</div>
+  ${days.length ? days.map(g => `<section class="section rday"><h2><span class="mono">${esc(md(g.d))}</span></h2><div class="stack">${g.xs.map(itemHTML).join("")}</div></section>`).join("") : `<div class="card empty" style="margin-top:16px"><b>${RF.tag || RF.pick ? "沒有符合的紀錄" : "河流還是空的"}</b>${RF.tag || RF.pick ? "換一個篩選看看" : "從源頭記第一則"}</div>`}`;
+}
+function openItem(k) {
+  const x = findItem(k); if (!x) return;
+  const media = (x.media || []).map(c => `<button class="addclip" data-view="${c.key}">${KIND_ICON[c.kind] || "🎬"} 看${KIND_LABEL[c.kind] || ""}</button>`).join("");
+  let tags = [...(x.o.tags || [])];
+  const tagRow = () => [...new Set([...allTags(), ...tags])].map(g => `<button class="tg ${tags.includes(g) ? "on" : ""}" data-tg="${esc(g)}">#${esc(g)}</button>`).join("");
+  const sc = sheet(`<h2>${esc(md(dateOf(x.ts)))} ${hmOf(x.ts)}</h2><p class="hint" style="margin:0">${esc(x.where)}${x.o.pose ? "・" + esc(x.o.pose) : ""}</p>
+    ${media ? `<div class="clips">${media}</div>` : ""}
+    ${x.type === "clip" ? `<p style="margin:0">${esc(x.text)}</p>` : `<div class="field"><label for="itext">文字</label><textarea id="itext">${esc(x.o.text || "")}</textarea></div>`}
+    <div class="field"><label>標籤</label><div class="row" id="tgs">${tagRow()}</div><div class="row"><input id="newtag" placeholder="新標籤，例如：好笑、開場、Lucky" style="flex:1"><button class="btn sm" id="addtag">加</button></div></div>
+    <label class="row" style="font-size:14px"><input type="checkbox" id="ipick" ${x.o.pick ? "checked" : ""}> ⭐ 挑選，放進工作台</label>
+    <button class="btn primary wide" id="isave">儲存</button>
+    ${x.go ? `<button class="btn ghost wide" id="igo">到工作台的這個地點 ›</button>` : ""}
+    ${x.type === "rec" ? `<button class="btn danger wide" id="idel">刪除這則</button>` : ""}`);
+  $("#tgs", sc).onclick = e => { const b = e.target.closest("[data-tg]"); if (!b) return; const g = b.dataset.tg; tags = tags.includes(g) ? tags.filter(t => t !== g) : [...tags, g]; $("#tgs", sc).innerHTML = tagRow(); };
+  const addTag = () => { const v = $("#newtag", sc).value.trim().replace(/^#/, ""); if (v && !tags.includes(v)) tags.push(v); $("#newtag", sc).value = ""; $("#tgs", sc).innerHTML = tagRow(); };
+  $("#addtag", sc).onclick = addTag; $("#newtag", sc).onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } };
+  $("#isave", sc).onclick = () => { if ($("#newtag", sc).value.trim()) addTag(); x.o.tags = tags; x.o.pick = $("#ipick", sc).checked; const ta = $("#itext", sc); if (ta) x.o.text = ta.value.trim(); saveItem(x); sc._close(); render(); toast("已儲存"); };
+  if (x.go) $("#igo", sc).onclick = () => { sc._close(); go(x.go); };
+  if (x.type === "rec") $("#idel", sc).onclick = async e => { const b = e.currentTarget; if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "再按一次確定刪除（OneDrive 的檔案會保留）"; return; } for (const c of x.o.media || []) await IDB.del(c.key); delete DATA.stream[x.id]; DATA.deleted["s/" + x.id] = Date.now(); DIRTY = true; writeCache(); scheduleSync(); sc._close(); render(); };
+}
+/* 源頭：記一則（文字／語音／照片），存成 DATA.stream 的一筆 */
+async function addRecord(kind, text, files, extra) {
+  const ts = (extra && extra.ts) || Date.now(), r = { ts, kind, text: text || "", media: [], tags: [], pick: false, ...(extra || {}) };
+  let k = 0; for (const f of files || []) { k++; const fk = f.kind || (/image/.test(f.file.type) ? "photo" : /video/.test(f.file.type) ? "video" : "audio");
+    const path = `源頭/${dateOf(ts)}/${r.src === "coach" ? "拍照教練" + (r.scene ? "_" + safeName(r.scene) : "") : "隨手記_" + (KIND_LABEL[fk] || "檔案")}_${stampOf(ts)}${files.length > 1 ? "-" + k : ""}.${extOf(f.file, f.file.type || "")}`;
+    r.media.push(await addClip(null, f.file, path, fk)); }
+  const id = uid("r"); DATA.stream[id] = r; touchRec(r); return id;
+}
+function openCapture(mode) {
+  const media = []; let R = null;
+  const list = () => media.map((m, i) => `<span class="chip x">${m.kind === "photo" ? "📷 照片" : m.kind === "video" ? "🎬 影片" : "🎙️ 語音"}<button data-rm="${i}" aria-label="移除">×</button></span>`).join("");
+  const sc = sheet(`<h2>${mode === "voice" ? "🎙️ 說一段" : mode === "text" ? "✍️ 寫一段" : "記一則"}</h2><p class="hint" style="margin:0">存進源頭・${hmOf(Date.now())}</p>
+    ${mode === "text" ? "" : recorderHTML()}
+    <div class="row" id="mlist"></div>
+    <div class="field"><label for="ctext">${mode === "voice" ? "轉出來的文字（可以修改）" : "文字"}</label><textarea id="ctext" placeholder="想到什麼就寫，也可以按鍵盤上的麥克風口述"></textarea></div>
+    ${mode ? "" : `<div class="pickers"><label class="pick">📷 照片／影片<input id="cphoto" type="file" accept="image/*,video/*" multiple class="vh"></label></div>`}
+    <button class="btn primary wide" id="csave">存進源頭</button>`, () => R && R.stopAll());
+  const ta = $("#ctext", sc), refresh = () => { $("#mlist", sc).innerHTML = list(); };
+  if (mode !== "text") R = bindRecorder(sc, ta, b => { media.push({ kind: "audio", file: b }); refresh(); });
+  if (!mode) $("#cphoto", sc).onchange = e => { for (const f of e.target.files) media.push({ kind: /video/.test(f.type) ? "video" : "photo", file: f }); e.target.value = ""; refresh(); };
+  $("#mlist", sc).onclick = e => { const b = e.target.closest("[data-rm]"); if (b) { media.splice(+b.dataset.rm, 1); refresh(); } };
+  if (mode === "text") setTimeout(() => ta.focus(), 50);
+  $("#csave", sc).onclick = async () => {
+    if (R && R.recording()) { R.stopAll(); await new Promise(r => setTimeout(r, 600)); }
+    const text = ta.value.trim(); if (!media.length && !text) { toast(mode === "voice" ? "還沒有錄音" : "先寫幾個字"); return; }
+    const kind = media.length ? media[0].kind : "text";
+    try { await addRecord(kind, text, media); } catch (er) { toast("存不進去：" + (er && er.message || "請從主畫面的 WonderMedia 開啟")); return; }
+    sc._close(); if (view.tab !== "src" && view.tab !== "river") go("src"); render(); toast("已存進源頭"); uploadPending();
+  };
+}
+/* 拍照教練存的照片：同網站 IndexedDB「origina-inbox」→ 變成源頭的照片紀錄，收完就刪 */
+let importing = false;
+async function importInbox() {
+  if (importing || !window.indexedDB) return; importing = true; let n = 0;
+  try {
+    const db = await new Promise((ok, no) => { const r = indexedDB.open("origina-inbox", 1); r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains("photos")) d.createObjectStore("photos", { keyPath: "id" }); }; r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); setTimeout(() => no(new Error("timeout")), 3000); });
+    const all = await new Promise((ok, no) => { const q = db.transaction("photos").objectStore("photos").getAll(); q.onsuccess = () => ok(q.result || []); q.onerror = () => no(q.error); });
+    for (const p of all.sort((a, b) => String(a.takenAt).localeCompare(String(b.takenAt)))) {
+      if (!p || !p.blob) continue;
+      const ts = Date.parse(p.takenAt) || Date.now(), file = p.blob instanceof File ? p.blob : new File([p.blob], "coach.jpg", { type: p.blob.type || "image/jpeg" });
+      await addRecord("photo", "", [{ kind: "photo", file }], { ts, src: "coach", scene: p.scene || "", pose: p.pose || "", inboxId: p.id });
+      await new Promise(ok => { const t = db.transaction("photos", "readwrite"); t.objectStore("photos").delete(p.id); t.oncomplete = ok; t.onerror = ok; });
+      n++;
+    }
+    db.close();
+  } catch (e) {}
+  importing = false;
+  if (n) { render(); toast(`拍照教練的 ${n} 張照片已流進源頭`); uploadPending(); }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && DATA) importInbox(); });
+
+/* 出海口：發布紀錄與成效 */
+function seaHTML() {
+  const ps = Object.entries(DATA.posts).map(([id, p]) => ({ id, ...p })).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const sum = PLATFORMS.concat("其他").map(pf => { const xs = ps.filter(p => (PLATFORMS.includes(p.platform) ? p.platform : "其他") === pf); return { pf, n: xs.length, v: xs.reduce((a, p) => a + (Number(p.views) || 0), 0), l: xs.reduce((a, p) => a + (Number(p.likes) || 0), 0) }; }).filter(x => x.n || PLATFORMS.includes(x.pf));
+  const num = v => v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + " 萬" : String(v);
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">出海口</h1><button class="btn sm primary" data-act="newpost">＋ 記一次發布</button></div>
+  <p class="hint">剪好的片從這裡出海。記下發在哪、連結和成效，之後回頭看哪種內容最有反應。</p>
+  <section class="section"><div class="seagrid">${sum.map(x => `<div class="card seac"><div class="pf">${esc(x.pf)}</div><div class="mono big">${x.n}</div><div class="muted" style="font-size:12px">支・觀看 ${num(x.v)}・讚 ${num(x.l)}</div></div>`).join("")}</div></section>
+  <section class="section"><header><h2>發布紀錄</h2></header>
+  ${ps.length ? `<div class="stack">${ps.map(p => `<button class="card post" data-post="${p.id}"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.platform)}</span><span class="mono muted" style="font-size:12px">${esc(md(p.date))}</span></div>
+    <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted mono" style="font-size:12px;margin-top:4px"><span>👀 ${num(Number(p.views) || 0)}</span><span>♥ ${num(Number(p.likes) || 0)}</span><span>💬 ${num(Number(p.comments) || 0)}</span>${p.saves ? `<span>🔖 ${num(Number(p.saves))}</span>` : ""}</div>${p.note ? `<p class="hint" style="margin-top:6px">${esc(p.note)}</p>` : ""}</button>`).join("")}</div>`
+    : `<div class="card empty"><b>還沒有出海的片</b>發布之後按「＋ 記一次發布」</div>`}</section>`;
+}
+function editPost(id) {
+  const p = id ? DATA.posts[id] : { platform: "IG", date: todayISO() };
+  const projOpts = [["", "（不連結）"]].concat(Object.entries(DATA.projects).map(([k, x]) => [k, x.title]));
+  const sc = form(id ? "編輯發布" : "記一次發布", [
+    { k: "title", l: "標題", v: p.title, ph: "例如：麥味登 哥哥們已讀不回" }, { k: "platform", l: "平台", opts: PLATFORMS.concat("TikTok", "Facebook", "其他").map(x => [x, x]), v: p.platform },
+    { k: "date", l: "發布日期", type: "date", v: p.date }, { k: "url", l: "連結", v: p.url, ph: "https://" },
+    { k: "views", l: "觀看", type: "number", v: p.views }, { k: "likes", l: "讚", type: "number", v: p.likes }, { k: "comments", l: "留言", type: "number", v: p.comments }, { k: "saves", l: "收藏", type: "number", v: p.saves },
+    { k: "pid", l: "來自哪個企劃", opts: projOpts, v: p.pid || "" }, { k: "note", l: "心得", v: p.note, ph: "哪裡反應好、下次怎麼改" }],
+    v => { if (!v.title) { toast("取個標題"); return false; } const nid = id || uid("o"); const r = DATA.posts[nid] || {}; Object.assign(r, v); DATA.posts[nid] = r; touchRec(r); render(); toast("已儲存"); },
+    id ? `${p.url ? `<a class="btn ghost wide" href="${esc(p.url)}" target="_blank" rel="noopener">打開貼文 ↗</a>` : ""}<button class="btn danger wide" id="pdel">刪除這筆</button>` : "");
+  if (id) $("#pdel", sc).onclick = e => { const b = e.currentTarget; if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "再按一次確定刪除"; return; } delete DATA.posts[id]; DATA.deleted["o/" + id] = Date.now(); DIRTY = true; writeCache(); scheduleSync(); sc._close(); render(); };
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -460,6 +653,11 @@ document.addEventListener("click", async e => {
     if (act === "newproj") return newProject();
     if (act === "addplace") return addPlace();
     if (act === "quick" || act === "note") return openNote(act === "quick");
+    if (act === "capture") return openCapture(null);
+    if (act === "cap-text") return openCapture("text");
+    if (act === "cap-voice") return openCapture("voice");
+    if (act === "newpost") return editPost(null);
+    if (act === "cutpicks") { const ps = riverItems().filter(x => x.o.pick); const ds = [...new Set(ps.map(x => dateOf(x.ts)))].sort(); const tg = [...new Set(ps.flatMap(x => x.o.tags || []))]; const txt = `幫我剪：河流挑選的 ${ps.length} 則（${ds.map(md).join("、")}）${tg.length ? "，標籤 " + tg.map(g => "#" + g).join(" ") : ""}`; try { await navigator.clipboard.writeText(txt); toast("已複製，貼到 Claude"); } catch (er) { prompt("複製這句話：", txt); } return; }
     if (act === "editshots") return editShots();
     if (act === "addday") { const p = curProj(), last = p.days[p.days.length - 1], dt = new Date((last ? last.date : todayISO()) + "T00:00"); dt.setDate(dt.getDate() + (last ? 1 : 0)); p.days.push({ id: uid("d"), date: dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate()), title: "", places: [] }); touch(view.pid); return go(`p/${view.pid}/${p.days.length - 1}`); }
     if (act === "editday") { const d = curDay(); return form("這一天", [{ k: "title", l: "標題", v: d.title, ph: "例如：家庭聚餐" }, { k: "date", l: "日期", type: "date", v: d.date }], v => { d.title = v.title; d.date = v.date || d.date; touch(view.pid); render(); }); }
@@ -480,6 +678,10 @@ document.addEventListener("click", async e => {
       return;
     }
   }
+  const pk = t.closest("[data-pick]"); if (pk) { const x = findItem(pk.dataset.pick); if (x) { x.o.pick = !x.o.pick; saveItem(x); render(); toast(x.o.pick ? "⭐ 已挑選，在工作台等著剪" : "已取消挑選"); } return; }
+  const rf = t.closest("[data-rf]"); if (rf) { const v = rf.dataset.rf; RF.pick = v === "★" ? !RF.pick : false; RF.tag = v.startsWith("#") ? (RF.tag === v.slice(1) ? "" : v.slice(1)) : ""; if (v === "") { RF.pick = false; RF.tag = ""; } render(); return; }
+  const it = t.closest("[data-item]"); if (it && !t.closest("[data-view]")) return openItem(it.dataset.item);
+  const po = t.closest("[data-post]"); if (po) return editPost(po.dataset.post);
   const rb = t.closest("[data-rec]"); if (rb) return openShotRecorder(rb.dataset.rec);
   const cb = t.closest("[data-cam]"); if (cb) return openCamera(cb.dataset.cam);
   const nb = t.closest("[data-snote]"); if (nb) return openShotNote(nb.dataset.snote);
@@ -493,6 +695,7 @@ document.addEventListener("click", async e => {
 });
 document.addEventListener("change", async e => {
   const t = e.target;
+  if (t.id === "capphoto") { const files = [...(t.files || [])]; t.value = ""; if (!files.length) return; try { for (const f of files) await addRecord(/video/.test(f.type) ? "video" : "photo", "", [{ file: f }]); } catch (er) { toast("存不進去：" + (er && er.message || "")); return; } render(); toast(`${files.length} 個檔案已存進源頭`); uploadPending(); return; }
   if (t.dataset.done) { const s = curPlace().shots.find(x => x.id === t.dataset.done); s.done = t.checked; touch(view.pid); render(); return; }
   if (t.dataset.upload) {
     const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === t.dataset.upload), s = pl.shots[i];
@@ -509,5 +712,5 @@ document.addEventListener("change", async e => {
   await handleRedirect();
   const c = ls.get(CACHE_KEY, null);
   if (c && c.data) { DATA = normalize(c.data); ETAG = c.eTag; DIRTY = c.dirty; } else { DATA = seedData(); DIRTY = true; writeCache(); }
-  parseHash(); render(); sync();
+  parseHash(); render(); sync(); importInbox();
 })();

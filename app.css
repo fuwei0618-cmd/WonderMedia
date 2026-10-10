@@ -288,3 +288,31 @@ button.addclip{background:transparent;font-family:inherit}
 .camside{border:0;background:rgba(255,255,255,.18);color:#fff;width:64px;height:64px;border-radius:50%;font-size:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700}
 .camsave{font-size:14px}.camsave small{font-size:11px;font-weight:500;opacity:.85}
 .camfull .recbig{margin:0}
+
+/* ---------- 記錄之流：源頭・河流・出海口 ---------- */
+.capgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cap{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:14px;background:var(--card);box-shadow:var(--shadow);padding:14px 4px;font-size:13px;font-weight:700;color:var(--ink);text-decoration:none;cursor:pointer;min-width:0}
+.cap b{font-size:26px;line-height:1}
+.cap.coach{background:color-mix(in srgb,var(--accent) 22%,var(--card))}
+.ritem{display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:start;padding:12px}
+.thumb{width:56px;height:56px;border-radius:10px;background:var(--soft);overflow:hidden;display:grid;place-items:center;position:relative;cursor:pointer;font-size:22px}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb i{position:absolute;inset:auto 4px 4px auto;font-style:normal;font-size:11px;color:#fff;background:rgba(0,0,0,.45);border-radius:6px;padding:0 4px}
+.rbody{min-width:0;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.rmeta{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;font-weight:700}
+.rmeta .muted{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.rtext{margin:0;font-size:14px;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pick{border:0;background:transparent;font-size:22px;line-height:1;color:var(--muted);padding:2px 4px}
+.pick.on{color:var(--accent)}
+.rfilters{display:flex;gap:6px;overflow-x:auto;padding-block:10px 2px;scrollbar-width:none}
+.rfilters button,.tg{flex:none;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700;color:var(--muted)}
+.rfilters button[aria-pressed="true"],.tg.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.rday{margin-top:20px}
+.rday h2{font-size:14px;color:var(--muted)}
+.pickrow{display:flex;flex-wrap:wrap;gap:8px}
+.seagrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.seac{padding:12px 14px}
+.seac .pf{font-size:13px;font-weight:700;color:var(--muted)}
+.seac .big{font-size:26px;font-weight:700;line-height:1.2}
+.post{text-align:left;border:0;width:100%;color:var(--ink)}
+.post .t{font-weight:700}
