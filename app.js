@@ -735,20 +735,19 @@ function editWB(kind, i) {
 let SND = null;
 
 
-/* 雙鏡頭：打開 Instagram 相機的「雙鏡頭」模式（免費），存到相簿後回來一鍵收進源頭 */
+/* 雙鏡頭：用 iPhone 捷徑「雙鏡頭」打開 2Camera（前後同時拍），存到相簿後回來一鍵收進源頭 */
+const DUAL_SHORTCUT = "雙鏡頭";
 function startDual() {
-  const goNow = () => { ls.set("dual-pending", { src: true, at: Date.now() }); const t0 = Date.now(); location.href = "instagram://camera";
-    setTimeout(() => { if (document.visibilityState === "visible" && Date.now() - t0 < 3000) toast("沒打開 Instagram？先在 App Store 安裝 Instagram"); }, 1800); };
-  if (ls.get("dual-ok2", false)) return goNow();
-  const sc = sheet(`<h2>📸 雙鏡頭（前後同時拍）</h2>
-    <p style="margin:0">用 Instagram 相機內建的「雙鏡頭」，免費、不用另外裝 App，拍完是一支前後合好的影片。</p>
-    <ol class="steps"><li>按下面的按鈕會打開 Instagram 相機</li>
-    <li>選「限時動態」或「Reels」，左邊工具列找 <b>雙鏡頭</b>（Dual），選好畫中畫或上下版型</li>
-    <li>錄好後按上方的 <b>↓ 下載</b>，存到相簿就好，不用發布</li>
-    <li>回到 WonderMedia，會跳出「收進剛拍的雙鏡頭」，點一下選那支影片</li></ol>
-    <p class="hint" style="margin:0">影片會變成源頭的一則紀錄，之後在河流挑選、交給 Claude 剪。</p>
-    <button class="btn primary wide" id="dgo">打開 Instagram 相機</button>`);
-  $("#dgo", sc).onclick = () => { ls.set("dual-ok2", true); sc._close(); goNow(); };
+  const goNow = () => { ls.set("dual-pending", { src: true, at: Date.now() }); location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(DUAL_SHORTCUT); };
+  if (ls.get("dual-ok3", false)) return goNow();
+  const sc = sheet(`<h2>📸 雙鏡頭（第一次設定）</h2>
+    <p style="margin:0">前後同時拍用 <b>2Camera</b>（iPhone 11 以後都能用）。網頁不能直接打開別的 App，所以借 iPhone 的「捷徑」當橋樑，只要設定一次：</p>
+    <ol class="steps"><li>App Store 搜尋 <b>2Camera</b> 安裝，打開後選好版型：畫中畫或上下分割</li>
+    <li>打開「捷徑」App → 右上 ＋ → 加入動作 → 搜尋「打開 App」→ 選 <b>2Camera</b></li>
+    <li>把捷徑命名為 <b>${DUAL_SHORTCUT}</b> → 完成</li></ol>
+    <p class="hint" style="margin:0">之後按「📸 雙鏡頭」會直接打開 2Camera。拍完存到相簿，回到 WonderMedia 會跳出「收進剛拍的雙鏡頭」，點一下選那支影片就好。</p>
+    <button class="btn primary wide" id="dgo">設定好了，打開 2Camera</button>`);
+  $("#dgo", sc).onclick = () => { ls.set("dual-ok3", true); sc._close(); goNow(); };
 }
 function checkDual() {
   const pd = ls.get("dual-pending", null); if (!pd) return;
