@@ -357,3 +357,4 @@ button.addclip{background:transparent;font-family:inherit}
 .qadd input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--paper)}
 .qsug{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .qsug .tg{font-size:12px;padding:3px 10px}
+.shot.dropping{outline:2px dashed var(--accent);outline-offset:4px;border-radius:10px;background:color-mix(in srgb,var(--accent) 10%,transparent)}

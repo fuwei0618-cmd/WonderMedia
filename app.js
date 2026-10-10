@@ -264,7 +264,7 @@ function placeHTML() {
     ${b.fields.map(f => `<div class="field ${f.full ? "full" : ""}"><label>${esc(f.l)}</label>${fieldHTML(f, pl.info[f.k])}</div>`).join("")}
   </div></section>`;
   const SHOTS = `  <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
-    <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
+    <div class="card">${pl.shots.map((s, i) => `<div data-drop="${s.id}" class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
       <div><div class="n" data-rename="${s.id}" role="button">${pad(i + 1)} ${esc(s.n)}${s.n.startsWith("待補") ? ` <span class="chip">點我取名</span>` : ""}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
       <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
@@ -338,13 +338,14 @@ function addPlace() {
 }
 function editShots() {
   const pl = curPlace(); let shots = pl.shots.map(s => ({ ...s }));
-  const rows = () => shots.map((s, i) => `<div class="ed" data-i="${i}"><input data-k="n" value="${esc(s.n)}" aria-label="鏡頭名稱"><input data-k="sec" inputmode="numeric" value="${s.sec || ""}" aria-label="秒數" placeholder="秒"><span class="row" style="gap:2px"><button class="icon-btn" data-up="${i}" aria-label="上移">↑</button><button class="icon-btn" data-del="${i}" aria-label="刪除">×</button></span><input data-k="h" value="${esc(s.h || "")}" placeholder="拍攝提示" style="grid-column:1/-1;font-size:13px"></div>`).join("");
+  const rows = () => shots.map((s, i) => `<div class="ed" data-i="${i}"><input data-k="n" value="${esc(s.n)}" aria-label="鏡頭名稱"><input data-k="sec" inputmode="numeric" value="${s.sec || ""}" aria-label="秒數" placeholder="秒"><span class="row" style="gap:2px"><button class="icon-btn" data-up="${i}" aria-label="上移">↑</button><button class="icon-btn" data-down="${i}" aria-label="下移">↓</button><button class="icon-btn" data-del="${i}" aria-label="刪除">×</button></span><input data-k="h" value="${esc(s.h || "")}" placeholder="拍攝提示" style="grid-column:1/-1;font-size:13px"></div>`).join("");
   const sc = sheet(`<h2>編輯鏡頭</h2><div id="eds">${rows()}</div><button class="btn" id="addshot">＋ 加一個鏡頭</button>
     <label class="row" style="font-size:14px"><input type="checkbox" id="asdef"> 存成「${esc((blocks()[pl.type] || BUILTIN.free).name)}」積木的預設</label>
     <button class="btn primary wide" id="ssave">儲存</button>`);
   const box = $("#eds", sc), read = () => box.querySelectorAll(".ed").forEach(r => { const s = shots[r.dataset.i]; r.querySelectorAll("[data-k]").forEach(inp => s[inp.dataset.k] = inp.dataset.k === "sec" ? Number(inp.value) || 0 : inp.value.trim()); });
   sc.addEventListener("click", e => {
-    const up = e.target.closest("[data-up]"), del = e.target.closest("[data-del]");
+    const up = e.target.closest("[data-up]"), del = e.target.closest("[data-del]"), dn = e.target.closest("[data-down]");
+    if (dn) { read(); const i = +dn.dataset.down; if (i < shots.length - 1) [shots[i + 1], shots[i]] = [shots[i], shots[i + 1]]; box.innerHTML = rows(); }
     if (up) { read(); const i = +up.dataset.up; if (i > 0) [shots[i - 1], shots[i]] = [shots[i], shots[i - 1]]; box.innerHTML = rows(); }
     if (del) { read(); const s = shots[+del.dataset.del]; if (s.clips && s.clips.length) { toast("這個鏡頭已經有影片，先移除影片"); return; } shots.splice(+del.dataset.del, 1); box.innerHTML = rows(); }
   });
@@ -867,6 +868,19 @@ function projSummary(p, di) {
   pls.forEach(pl => { pl.shots.forEach(sh => sh.clips.forEach(c => { if (c.kind === "audio") a++; else if (c.kind === "photo") ph++; else v++; if (c.dual) dual++; })); pl.notes.forEach(n => (n.media || []).forEach(c => { if (c.kind === "audio") a++; else if (c.kind === "photo") ph++; else v++; if (c.dual) dual++; })); });
   return { days: days.length, places: pls.length, v, a, ph, dual, toString() { return `${this.days} 天・${this.places} 個地點・影片 ${this.v}・錄音 ${this.a}・照片 ${this.ph}${this.dual ? "・雙鏡頭 " + this.dual : ""}`; } };
 }
+
+
+/* 電腦上可以直接把影片／照片拖到某個鏡頭上 */
+document.addEventListener("dragover", e => { const d = e.target.closest && e.target.closest("[data-drop]"); if (d && e.dataTransfer && [...e.dataTransfer.types].includes("Files")) { e.preventDefault(); d.classList.add("dropping"); } });
+document.addEventListener("dragleave", e => { const d = e.target.closest && e.target.closest("[data-drop]"); if (d && !d.contains(e.relatedTarget)) d.classList.remove("dropping"); });
+document.addEventListener("drop", async e => {
+  const d = e.target.closest && e.target.closest("[data-drop]"); if (!d) return; e.preventDefault(); d.classList.remove("dropping");
+  const files = [...(e.dataTransfer.files || [])].filter(f => /^(video|image|audio)\//.test(f.type)); if (!files.length) return toast("只收影片、照片、錄音檔");
+  const p = curProj(), pl = curPlace(), i = pl.shots.findIndex(x => x.id === d.dataset.drop), s = pl.shots[i];
+  try { let k = 0; for (const f of files) { k++; const kind = /image/.test(f.type) ? "photo" : /audio/.test(f.type) ? "audio" : "video"; const path = `${safeName(p.title)}/D${view.day + 1}_${safeName(pl.name)}_${pad(i + 1)}_${safeName(s.n)}_${stamp()}${files.length > 1 ? "-" + k : ""}.${extOf(f, f.type)}`; s.clips.push(await addClip(view.pid, f, path, kind)); } }
+  catch (er) { return toast("加不進去：" + (er && er.message || "")); }
+  s.done = true; touch(view.pid); render(); toast(`${files.length} 個檔案已掛到「${s.n}」，上傳中`); uploadPending();
+});
 
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
