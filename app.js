@@ -264,6 +264,8 @@ function placeHTML() {
       <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
       <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
+      <div class="qadd"><input id="qshot" placeholder="＋ 快速加鏡頭，打完按 Enter" enterkeyhint="done" aria-label="快速加鏡頭"><button class="btn sm primary" data-act="qshot">加</button></div>
+      <div class="qsug">${shotSuggest(pl).map(n => `<button class="tg" data-qs="${esc(n)}">＋${esc(n)}</button>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>`;
   return `<div class="top"><button class="icon-btn" data-go="p/${view.pid}/${view.day}" aria-label="返回">‹</button><h1>${esc(p.title)}</h1><button class="icon-btn" data-act="placemenu" aria-label="更多">⋯</button></div>
@@ -824,6 +826,23 @@ function quickGo() {
   $("#qgo", sc).onclick = goNow; inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); goNow(); } };
 }
 
+
+/* 快速加鏡頭：打字或點建議，一下就加到清單最後 */
+function shotSuggest(pl) {
+  const have = new Set(pl.shots.map(s => s.n)), own = ((blocks()[pl.type] || {}).shots || []).map(s => s.n);
+  const common = ["門口招牌", "環境", "食物特寫", "第一口反應", "一人一句評價", "價格", "細節特寫", "人在景裡", "碎碎念", "乾杯", "窗外風景", "心得"];
+  return [...new Set([...own, ...common])].filter(n => !have.has(n)).slice(0, 8);
+}
+function quickShot(name) {
+  name = (name || "").trim(); if (!name) return;
+  const pl = curPlace(); if (!pl) return;
+  const base = Object.values(BUILTIN).flatMap(b => b.shots).find(s => s.n === name);
+  pl.shots.push({ id: uid("s"), n: name, h: base ? base.h : "", sec: base ? base.sec : 4, done: false, clips: [] });
+  touch(view.pid); render(); toast("已加：" + name);
+  setTimeout(() => { const i = $("#qshot"); if (i) { i.scrollIntoView({ block: "center" }); } }, 30);
+}
+document.addEventListener("keydown", e => { if (e.target && e.target.id === "qshot" && e.key === "Enter") { e.preventDefault(); quickShot(e.target.value); } });
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -835,6 +854,7 @@ document.addEventListener("click", async e => {
     if (act === "sync") { await sync(); return toast(SYNC === "ok" ? "已同步" : "同步沒成功"); }
     if (act === "newproj") return newProject();
     if (act === "quickgo") return quickGo();
+    if (act === "qshot") return quickShot(($("#qshot") || {}).value);
     if (act === "addplace") return addPlace();
     if (act === "quick" || act === "note") return openNote(act === "quick");
     if (act === "capture") return openCapture(null);
@@ -862,6 +882,7 @@ document.addEventListener("click", async e => {
       return;
     }
   }
+  const qs = t.closest("[data-qs]"); if (qs) return quickShot(qs.dataset.qs);
   const we = t.closest("[data-wbedit]"); if (we) { const [k, i] = we.dataset.wbedit.split(":"); return editWB(k, +i); }
   const wa = t.closest("[data-wbadd]"); if (wa) return editWB(wa.dataset.wbadd, null);
   const kt = t.closest("[data-ktab]"); if (kt) { KF.tab = kt.dataset.ktab; if (SND) { SND.pause(); SND = null; } render(); return; }
