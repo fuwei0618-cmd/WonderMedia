@@ -243,7 +243,8 @@ function projectHTML() {
       return `<div class="item ${b.cls}" data-go="p/${view.pid}/${di}/${pl.id}" style="cursor:pointer"><time>${esc(pl.time || "—")}</time><div><div class="t"><span>${esc(pl.name)}</span><span class="muted">›</span></div>
         <div class="meta"><span class="chip type">${esc(b.name)}</span>${pr.n ? `<span class="chip">鏡頭 ${pr.d}/${pr.n}</span>` : ""}${laughCount(pl) ? `<span class="chip">⭐ ${laughCount(pl)}</span>` : ""}${pl.notes.length ? `<span class="chip">📝 ${pl.notes.length}</span>` : ""}</div></div></div>
         <div class="insert"><button data-act="addplace">＋ 插入地點</button></div>`; }).join("") : `<div class="empty"><b>這天還沒有地點</b>按「插入地點」開始</div>`}
-  </div></div></section>`;
+  </div></div></section>
+  <section class="section"><div class="card"><b>整個企劃拍完了？</b><p class="hint" style="margin:4px 0 10px">${projSummary(p)}</p><button class="btn primary wide" data-act="cutproj">📋 整個企劃幫我剪</button></div></section>`;
 }
 function fieldHTML(f, v) {
   if (f.kind === "stars") return `<div class="stars" data-f="${f.k}">${[1, 2, 3, 4, 5].map(i => `<button data-star="${i}" class="${(v || 0) >= i ? "on" : ""}" aria-label="${i} 顆星">★</button>`).join("")}</div>`;
@@ -857,6 +858,13 @@ async function sendToClaude(txt) {
   $("#goclaude", sc).onclick = () => setTimeout(() => sc._close(), 300);
 }
 
+
+function projSummary(p) {
+  const pls = p.days.flatMap(d => d.places); let v = 0, a = 0, ph = 0, dual = 0;
+  pls.forEach(pl => { pl.shots.forEach(sh => sh.clips.forEach(c => { if (c.kind === "audio") a++; else if (c.kind === "photo") ph++; else v++; if (c.dual) dual++; })); pl.notes.forEach(n => (n.media || []).forEach(c => { if (c.kind === "audio") a++; else if (c.kind === "photo") ph++; else v++; if (c.dual) dual++; })); });
+  return { days: p.days.length, places: pls.length, v, a, ph, dual, toString() { return `${this.days} 天・${this.places} 個地點・影片 ${this.v}・錄音 ${this.a}・照片 ${this.ph}${this.dual ? "・雙鏡頭 " + this.dual : ""}`; } };
+}
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -868,6 +876,7 @@ document.addEventListener("click", async e => {
     if (act === "sync") { await sync(); return toast(SYNC === "ok" ? "已同步" : "同步沒成功"); }
     if (act === "newproj") return newProject();
     if (act === "quickgo") return quickGo();
+    if (act === "cutproj") { const p = curProj(), sm = projSummary(p); const fx = [p.style && "賽道：" + p.style, p.tpl && "劇本：" + p.tpl, styleMethod(p) && "剪法：" + styleMethod(p)].filter(Boolean).join("，"); const where = p.days.map((d, i) => `D${i + 1} ` + (d.places.map(x => x.name).join("、") || "—")).join("；"); return sendToClaude(`幫我剪整個企劃：${p.title}（${sm}）${fx ? "，" + fx : ""}。地點：${where}`); }
     if (act === "qshot") return quickShot(($("#qshot") || {}).value);
     if (act === "addplace") return addPlace();
     if (act === "quick" || act === "note") return openNote(act === "quick");
