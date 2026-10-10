@@ -261,11 +261,11 @@ function placeHTML() {
   </div></section>`;
   const SHOTS = `  <section class="section"><header><h2>🎬 拍攝清單</h2><span class="muted mono" style="font-size:13px">${pr.d} / ${pr.n}</span></header>
     <div class="card">${pl.shots.map((s, i) => `<div class="shot ${s.done || s.clips.length ? "done" : ""}"><input type="checkbox" data-done="${s.id}" ${s.done || s.clips.length ? "checked" : ""} aria-label="${esc(s.n)} 拍好了">
-      <div><div class="n">${pad(i + 1)} ${esc(s.n)}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
+      <div><div class="n" data-rename="${s.id}" role="button">${pad(i + 1)} ${esc(s.n)}${s.n.startsWith("待補") ? ` <span class="chip">點我取名</span>` : ""}</div>${s.h ? `<div class="h">${esc(s.h)}</div>` : ""}<div class="clips">${s.clips.map(clipChip).join("")}</div>${s.clips.filter(c => c.text).map(c => `<div class="h" style="margin-top:4px">🎙️ ${esc(c.text)}</div>`).join("")}${s.note ? `<div class="snote" data-snote="${s.id}">📝 ${esc(s.note)}</div>` : ""}
       <div class="clips"><button class="addclip" data-cam="${s.id}">🎬 拍攝</button><button class="addclip" data-dual="${s.id}">📸 雙鏡頭</button><label class="addclip">🖼️ 相簿<input type="file" accept="video/*,image/*" multiple class="vh" data-upload="${s.id}"></label><button class="addclip" data-rec="${s.id}">🎙️ 錄音</button><button class="addclip" data-snote="${s.id}">📝 筆記</button><button class="addclip${(s.laughs || []).length ? " on" : ""}" data-laugh="${s.id}">⭐ 笑點${(s.laughs || []).length ? " " + s.laughs.length : ""}</button></div></div>
       <span class="sec">${s.sec ? s.sec + "秒" : ""}</span></div>`).join("") || `<p class="hint">這塊積木沒有固定鏡頭，用下面的「記一則」自由記錄。</p>`}
       <div class="qadd"><input id="qshot" placeholder="＋ 快速加鏡頭，打完按 Enter" enterkeyhint="done" aria-label="快速加鏡頭"><button class="btn sm primary" data-act="qshot">加</button></div>
-      <div class="qsug">${shotSuggest(pl).map(n => `<button class="tg" data-qs="${esc(n)}">＋${esc(n)}</button>`).join("")}</div>
+      <div class="qsug"><button class="tg on" data-qs="待補">＋待補</button>${shotSuggest(pl).map(n => `<button class="tg" data-qs="${esc(n)}">＋${esc(n)}</button>`).join("")}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm ghost" data-act="editshots">✎ 編輯鏡頭</button></div></div>
     <p class="hint">每個鏡頭都可以拍影片或直接錄音。拍到好笑的瞬間按那個鏡頭的「⭐ 笑點」，Claude 剪片時會把那段留下來、加料。</p></section>`;
   return `<div class="top"><button class="icon-btn" data-go="p/${view.pid}/${view.day}" aria-label="返回">‹</button><h1>${esc(p.title)}</h1><button class="icon-btn" data-act="placemenu" aria-label="更多">⋯</button></div>
@@ -837,6 +837,7 @@ function shotSuggest(pl) {
 function quickShot(name) {
   name = (name || "").trim(); if (!name) return;
   const pl = curPlace(); if (!pl) return;
+  if (name === "待補") { const k = pl.shots.filter(s => s.n.startsWith("待補")).length; name = k ? "待補" + (k + 1) : "待補"; pl.shots.push({ id: uid("s"), n: name, h: "先拍，之後點名稱取名", sec: 0, done: false, clips: [] }); touch(view.pid); render(); toast("已加：" + name); return; }
   const base = Object.values(BUILTIN).flatMap(b => b.shots).find(s => s.n === name);
   pl.shots.push({ id: uid("s"), n: name, h: base ? base.h : "", sec: base ? base.sec : 4, done: false, clips: [] });
   touch(view.pid); render(); toast("已加：" + name);
@@ -896,6 +897,7 @@ document.addEventListener("click", async e => {
     }
   }
   const qs = t.closest("[data-qs]"); if (qs) return quickShot(qs.dataset.qs);
+  const rn = t.closest("[data-rename]"); if (rn) { const s = curPlace().shots.find(x => x.id === rn.dataset.rename); if (!s) return; return form("鏡頭名稱", [{ k: "n", l: "名稱", v: s.n.startsWith("待補") ? "" : s.n, ph: "例如：哥哥的反應" }, { k: "h", l: "提示（可空白）", v: s.h === "先拍，之後點名稱取名" ? "" : s.h }], v => { if (!v.n) { toast("取個名字"); return false; } s.n = v.n; s.h = v.h; touch(view.pid); render(); }); }
   const we = t.closest("[data-wbedit]"); if (we) { const [k, i] = we.dataset.wbedit.split(":"); return editWB(k, +i); }
   const wa = t.closest("[data-wbadd]"); if (wa) return editWB(wa.dataset.wbadd, null);
   const kt = t.closest("[data-ktab]"); if (kt) { KF.tab = kt.dataset.ktab; if (SND) { SND.pause(); SND = null; } render(); return; }
