@@ -795,6 +795,18 @@ function checkDual() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && DATA) setTimeout(checkDual, 400); });
 
+
+/* 自動更新：手機常留著舊版，每次回到 App 檢查網站上的版本號，不一樣就重新載入 */
+async function checkUpdate() {
+  try {
+    const cur = ((document.querySelector('script[src*="app.js"]') || {}).src || "").split("v=")[1] || "";
+    const html = await (await fetch("./?u=" + Date.now(), { cache: "no-store" })).text();
+    const m = /app\.js\?v=(\d+)/.exec(html);
+    if (m && cur && m[1] !== cur && !document.querySelector(".scrim")) location.reload();
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+
 /* ---------- 事件 ---------- */
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -872,5 +884,5 @@ document.addEventListener("change", async e => {
   await handleRedirect();
   const c = ls.get(CACHE_KEY, null);
   if (c && c.data) { DATA = normalize(c.data); ETAG = c.eTag; DIRTY = c.dirty; } else { DATA = seedData(); DIRTY = true; writeCache(); }
-  parseHash(); render(); sync(); importInbox(); setTimeout(checkDual, 600);
+  parseHash(); render(); sync(); importInbox(); setTimeout(checkDual, 600); checkUpdate();
 })();
