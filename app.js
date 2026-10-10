@@ -338,8 +338,8 @@ function addPlace() {
 }
 function editShots() {
   const pl = curPlace(); let shots = pl.shots.map(s => ({ ...s }));
-  const rows = () => shots.map((s, i) => `<div class="ed" data-i="${i}"><input data-k="n" value="${esc(s.n)}" aria-label="鏡頭名稱"><input data-k="sec" inputmode="numeric" value="${s.sec || ""}" aria-label="秒數" placeholder="秒"><span class="row" style="gap:2px"><button class="icon-btn" data-up="${i}" aria-label="上移">↑</button><button class="icon-btn" data-down="${i}" aria-label="下移">↓</button><button class="icon-btn" data-del="${i}" aria-label="刪除">×</button></span><input data-k="h" value="${esc(s.h || "")}" placeholder="拍攝提示" style="grid-column:1/-1;font-size:13px"></div>`).join("");
-  const sc = sheet(`<h2>編輯鏡頭</h2><div id="eds">${rows()}</div><button class="btn" id="addshot">＋ 加一個鏡頭</button>
+  const rows = () => shots.map((s, i) => `<div class="ed" data-i="${i}"><span class="grip" data-grip="${i}" aria-label="按住拖曳排序">≡</span><input data-k="n" value="${esc(s.n)}" aria-label="鏡頭名稱"><input data-k="sec" inputmode="numeric" value="${s.sec || ""}" aria-label="秒數" placeholder="秒"><span class="row" style="gap:2px"><button class="icon-btn" data-up="${i}" aria-label="上移">↑</button><button class="icon-btn" data-down="${i}" aria-label="下移">↓</button><button class="icon-btn" data-del="${i}" aria-label="刪除">×</button></span><input data-k="h" value="${esc(s.h || "")}" placeholder="拍攝提示" style="grid-column:1/-1;font-size:13px"></div>`).join("");
+  const sc = sheet(`<h2>編輯鏡頭</h2><p class="hint" style="margin:0">按住左邊 ≡ 上下拖曳就能排順序</p><div id="eds">${rows()}</div><button class="btn" id="addshot">＋ 加一個鏡頭</button>
     <label class="row" style="font-size:14px"><input type="checkbox" id="asdef"> 存成「${esc((blocks()[pl.type] || BUILTIN.free).name)}」積木的預設</label>
     <button class="btn primary wide" id="ssave">儲存</button>`);
   const box = $("#eds", sc), read = () => box.querySelectorAll(".ed").forEach(r => { const s = shots[r.dataset.i]; r.querySelectorAll("[data-k]").forEach(inp => s[inp.dataset.k] = inp.dataset.k === "sec" ? Number(inp.value) || 0 : inp.value.trim()); });
@@ -349,6 +349,13 @@ function editShots() {
     if (up) { read(); const i = +up.dataset.up; if (i > 0) [shots[i - 1], shots[i]] = [shots[i], shots[i - 1]]; box.innerHTML = rows(); }
     if (del) { read(); const s = shots[+del.dataset.del]; if (s.clips && s.clips.length) { toast("這個鏡頭已經有影片，先移除影片"); return; } shots.splice(+del.dataset.del, 1); box.innerHTML = rows(); }
   });
+  /* 按住 ≡ 上下拖曳排序（手機、電腦都可以） */
+  let drag = null;
+  box.addEventListener("pointerdown", e => { const g = e.target.closest("[data-grip]"); if (!g) return; e.preventDefault(); read(); drag = +g.dataset.grip; box.classList.add("sorting"); box.querySelector(`.ed[data-i="${drag}"]`).classList.add("lift"); });
+  const move = e => { if (drag == null) return; e.preventDefault(); const rs = [...box.querySelectorAll(".ed")]; let to = rs.findIndex(r => { const b = r.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; }); if (to < 0) to = rs.length - 1; if (to > drag) to = Math.min(to, rs.length - 1); if (to !== drag && to >= 0) { const [m] = shots.splice(drag, 1); shots.splice(to, 0, m); drag = to; box.innerHTML = rows(); box.querySelector(`.ed[data-i="${drag}"]`).classList.add("lift"); } };
+  const end = () => { if (drag == null) return; drag = null; box.classList.remove("sorting"); box.querySelectorAll(".lift").forEach(r => r.classList.remove("lift")); };
+  document.addEventListener("pointermove", move, { passive: false }); document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end);
+  const oldClose = sc._close; sc._close = () => { document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", end); document.removeEventListener("pointercancel", end); oldClose(); };
   $("#addshot", sc).onclick = () => { read(); shots.push({ id: uid("s"), n: "新鏡頭", h: "", sec: 4, done: false, clips: [] }); box.innerHTML = rows(); };
   $("#ssave", sc).onclick = () => { read(); shots = shots.filter(s => s.n); pl.shots = shots.map(s => ({ clips: [], done: false, ...s })); if ($("#asdef", sc).checked) saveBlocks(pl.type, shots); touch(view.pid); sc._close(); render(); toast("已儲存"); };
 }
