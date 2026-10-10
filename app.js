@@ -922,10 +922,15 @@ function scriptCard(p) {
 }
 function askScript() {
   const p = curProj();
-  const sc = form("請 Claude 寫腳本", [{ k: "notes", l: "想講的重點（隨便打，條列也行）", v: p.scriptNotes || "", ph: "例如：Origina 是什麼、為什麼做、怎麼用" }, { k: "len", l: "大概多長（秒）", type: "number", v: p.scriptLen || "60" }], v => {
-    p.scriptNotes = v.notes; p.scriptLen = v.len; touch(view.pid);
-    const t = tplOf(p), st = styleOf(p);
-    sendToClaude(`幫我寫口播腳本：${p.title}${st ? "（賽道：" + st.n + "）" : ""}${t ? "，劇本：" + t.n + "（" + t.flow.join("→") + "）" : ""}，長度約 ${v.len || 60} 秒，口語、像我平常講話。重點：${v.notes || "（我等一下補）"}。寫好我貼回 WonderMedia 的腳本欄。`);
+  const sc = form("請 Claude 寫腳本", [
+    { k: "kind", l: "形式", v: p.scriptKind || "demo", opts: [["talk", "純口播（對鏡頭講）"], ["demo", "口播＋螢幕操作示範"]] },
+    { k: "notes", l: "想講的重點（隨便打，條列也行）", v: p.scriptNotes || "", ph: "例如：Origina 是什麼、為什麼做、怎麼用" },
+    { k: "len", l: "大概多長（秒）", type: "number", v: p.scriptLen || "60" }], v => {
+    p.scriptKind = v.kind; p.scriptNotes = v.notes; p.scriptLen = v.len; touch(view.pid);
+    const t = tplOf(p), st = styleOf(p), demo = v.kind === "demo";
+    sendToClaude(`幫我寫口播腳本：${p.title}${st ? "（賽道：" + st.n + "）" : ""}${t ? "，劇本：" + t.n + "（" + t.flow.join("→") + "）" : ""}，長度約 ${v.len || 60} 秒，口語、像我平常講話。重點：${v.notes || "（我等一下補）"}。`
+      + (demo ? `\n這支要「螢幕錄影實際操作」：請用這個對話裡我們做 Origina／WonderMedia 的過程和總表（https://claude.ai/artifact/6tKf8aWatDsrMuhC2wVAhm）當背景，每一段給我「台詞＋畫面（哪個 App、哪一頁、點哪裡）」，最後列一條完整的錄影路線（照順序點）。可以的話也幫我用示範資料把這條路線錄成直式影片，放到 _輸出。` : "")
+      + `\n寫好我把台詞貼回 WonderMedia 的腳本欄。`);
   });
 }
 function editScript() {
