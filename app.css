@@ -194,8 +194,8 @@ details[open].card summary:after{content:"－"}
 .tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);padding:4px 0;font-weight:500}
 .tabs button svg{width:22px;height:22px}
 .tabs button[aria-current="true"]{color:var(--ink);font-weight:700}
-.tabs .rec{position:relative;top:-14px}
-.tabs .rec .dot{width:54px;height:54px;border-radius:50%;background:var(--rec);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px color-mix(in srgb,var(--rec) 45%,transparent)}
+.fab{position:fixed;right:12px;bottom:calc(132px + env(safe-area-inset-bottom,0px));z-index:11;width:54px;height:54px;border-radius:50%;border:0;background:var(--rec);display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px color-mix(in srgb,var(--rec) 45%,transparent);cursor:pointer}
+.fab[hidden]{display:none}
 
 /* sheet */
 .scrim{position:fixed;inset:0;background:rgba(10,15,25,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}

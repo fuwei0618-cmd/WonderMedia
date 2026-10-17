@@ -204,6 +204,7 @@ function render() {
   else if (view.tab === "p" && DATA.projects[view.pid]) app.innerHTML = projectHTML();
   else app.innerHTML = homeHTML();
   $("#tabs").innerHTML = tabsHTML();
+  { const fb = $("#fab"); if (fb) fb.hidden = view.tab === "set"; }
   fillThumbs();
 }
 const ICON = {
@@ -218,7 +219,6 @@ function tabsHTML() {
   const cur = view.tab === "p" || view.tab === "home" || view.tab === "blocks" || view.tab === "wb" ? "work" : view.tab === "set" ? "src" : view.tab;
   return `<button data-go="src" aria-current="${cur === "src"}">${ICON.src}源頭</button>
     <button data-go="river" aria-current="${cur === "river"}">${ICON.river}河流</button>
-    <button class="rec" data-act="capture" aria-label="隨手記"><span class="dot"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span></button>
     <button data-go="home" aria-current="${cur === "work"}">${ICON.home}工作台</button>
     <button data-go="sea" aria-current="${cur === "sea"}">${ICON.sea}出海口</button>`;
 }
@@ -570,7 +570,7 @@ function srcHTML() {
     <a class="cap coach" href="${COACH}"><b>🧑‍🎨</b>拍照教練</a>
   </div></section>
   <section class="section"><header><h2>剛流進來的</h2><span class="muted mono" style="font-size:13px">今天 ${todays.length} 則</span></header>
-    ${items.length ? `<div class="stack">${items.map(itemHTML).join("")}</div><button class="btn ghost wide" data-go="river">看整條河流 ›</button>` : `<div class="card empty"><b>源頭還是空的</b>按上面的按鈕，或下面中間的 ＋ 記第一則</div>`}</section>`;
+    ${items.length ? `<div class="stack">${items.map(itemHTML).join("")}</div><button class="btn ghost wide" data-go="river">看整條河流 ›</button>` : `<div class="card empty"><b>源頭還是空的</b>按上面的按鈕，或右下角的 ＋ 記第一則</div>`}</section>`;
 }
 function itemHTML(x) {
   const tags = (x.o.tags || []).map(g => `<span class="chip">#${esc(g)}</span>`).join("");
