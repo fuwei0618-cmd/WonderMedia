@@ -186,8 +186,6 @@ addEventListener("hashchange", () => { parseHash(); render(); scrollTo(0, 0); })
 
 function syncBanner() {
   if (SYNC === "ok") { const n = allClips().filter(x => !x.c.od).length; return n ? `<div class="banner"><span>⬆️ ${n} 段影片上傳中…</span></div>` : ""; }
-  if (SYNC === "expired" || !signedIn()) return `<div class="banner"><span>先存在這支手機。登入 OneDrive 後，紀錄和影片才會傳到電腦給 Claude 剪。</span><button class="btn sm primary" data-act="login">登入</button></div>`;
-  if (SYNC === "offline") return `<div class="banner"><span>目前沒網路，先存在手機，連上會自動上傳</span></div>`;
   return "";
 }
 function render() {
@@ -197,17 +195,19 @@ function render() {
   if (view.tab === "src") app.innerHTML = srcHTML();
   else if (view.tab === "river") app.innerHTML = riverHTML();
   else if (view.tab === "sea") app.innerHTML = seaHTML();
-  else if (view.tab === "blocks") app.innerHTML = blocksHTML();
-  else if (view.tab === "wb") app.innerHTML = wbHTML(view.pid);
-  else if (view.tab === "set") app.innerHTML = settingsHTML();
+  else if (view.tab === "blocks" || (view.tab === "wb" && view.pid !== "kit")) app.innerHTML = wbAllHTML();
+  else if (view.tab === "me" || view.tab === "set" || (view.tab === "wb" && view.pid === "kit")) app.innerHTML = meHTML();
   else if (view.tab === "p" && view.place && DATA.projects[view.pid]) app.innerHTML = placeHTML();
   else if (view.tab === "p" && DATA.projects[view.pid]) app.innerHTML = projectHTML();
   else app.innerHTML = homeHTML();
   $("#tabs").innerHTML = tabsHTML();
-  { const fb = $("#fab"); if (fb) fb.hidden = view.tab === "set"; }
+  { const fb = $("#fab"); if (fb) { const t = view.tab, inWb = t === "blocks" || t === "wb", isMe = t === "me" || t === "set" || (t === "wb" && view.pid === "kit");
+    const act = isMe || inWb ? "" : t === "sea" ? "newpost" : t === "home" ? "newproj" : "capture";
+    fb.hidden = !act; fb.dataset.act = act || "capture"; fb.setAttribute("aria-label", { newpost: "記一次發布", newproj: "新增企劃", capture: "隨手記" }[act] || "新增"); } }
   fillThumbs();
 }
 const ICON = {
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>',
   src: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3 4 5 6.6 5 9.5A5 5 0 0 1 7 12.5C7 9.6 9 7 12 3z"/></svg>',
   river: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7c3-2 6 2 9 0s6-2 9 0M3 12c3-2 6 2 9 0s6-2 9 0M3 17c3-2 6 2 9 0s6-2 9 0"/></svg>',
   sea: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18c2 1.5 4 1.5 6 0s4-1.5 6 0 4 1.5 6 0M12 3v10M8 9l4 4 4-4"/></svg>',
@@ -216,11 +216,12 @@ const ICON = {
   set: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>'
 };
 function tabsHTML() {
-  const cur = view.tab === "p" || view.tab === "home" || view.tab === "blocks" || view.tab === "wb" ? "work" : view.tab === "set" ? "src" : view.tab;
+  const cur = view.tab === "set" || view.tab === "me" || (view.tab === "wb" && view.pid === "kit") ? "me" : view.tab === "p" || view.tab === "home" || view.tab === "blocks" || view.tab === "wb" ? "work" : view.tab;
   return `<button data-go="src" aria-current="${cur === "src"}">${ICON.src}源頭</button>
     <button data-go="river" aria-current="${cur === "river"}">${ICON.river}河流</button>
     <button data-go="home" aria-current="${cur === "work"}">${ICON.home}工作台</button>
-    <button data-go="sea" aria-current="${cur === "sea"}">${ICON.sea}出海口</button>`;
+    <button data-go="sea" aria-current="${cur === "sea"}">${ICON.sea}出海口</button>
+    <button data-go="me" aria-current="${cur === "me"}">${ICON.me}我</button>`;
 }
 function laughCount(pl) { return (pl.laughs || []).length + pl.shots.reduce((a, s) => a + (s.laughs || []).length, 0); }
 function progress(pl) { const n = pl.shots.length, d = pl.shots.filter(s => s.done || s.clips.length).length; return { n, d }; }
@@ -230,15 +231,15 @@ function homeHTML() {
   return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>
   ${wbNav("plan")}
   <button class="btn primary wide quickgo" data-act="quickgo">⚡ 現在就拍<small>只要打地點，其他之後再補</small></button>
-  <p class="hint">開企劃時選好賽道和劇本，分鏡積木和剪法會自動帶出來；從河流挑的素材也在這裡等著剪。</p>
+  <p class="hint">要排完整企劃就按右下角的＋。開企劃時選好賽道和劇本，分鏡和剪法會自動帶出來。</p>
   ${syncBanner()}
   <section class="section"><header><h2>⭐ 從河流挑的素材</h2><span class="muted mono" style="font-size:13px">${picks.length} 則</span></header>
     <div class="card">${picks.length ? `<div class="pickrow">${picks.slice(0, 12).map(x => thumbHTML(x)).join("")}</div><button class="btn primary wide" data-act="cutpicks" style="margin-top:12px">📋 複製「幫我剪：河流挑選」</button>` : `<p class="hint">在河流裡按 ☆ 挑選，挑好的會出現在這裡。</p>`}</div></section>
-  <section class="section"><header><h2>拍攝企劃</h2><span class="row" style="gap:6px"><button class="btn sm ghost" data-act="fromworld">🌏 從 World 帶入</button><button class="btn sm ghost" data-act="newproj">＋ 完整企劃</button></span></header>
+  <section class="section"><header><h2>拍攝企劃</h2><button class="btn sm ghost" data-act="fromworld">🌏 從 World 帶入</button></header>
   <div class="stack">${ps.length ? ps.map(p => { const pls = p.days.flatMap(d => d.places); const tot = pls.reduce((a, pl) => a + pl.shots.length, 0), done = pls.reduce((a, pl) => a + progress(pl).d, 0);
     return `<button class="card pcard" data-go="p/${p.id}/0"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.tag)}</span><span class="mono muted" style="font-size:12px">${md((p.days[0] || {}).date)}${p.days.length > 1 ? " 起 " + p.days.length + " 天" : ""}</span></div>
       <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted" style="font-size:13px;margin-top:4px">${pls.map(x => esc(x.name)).join("・") || "還沒有地點"}</div>
-      <div class="row" style="margin-top:8px;font-size:12px"><span class="bar"><i style="width:${tot ? done / tot * 100 : 0}%"></i></span><span class="muted">鏡頭 ${done}/${tot}</span></div></button>`; }).join("") : `<div class="card empty"><b>還沒有企劃</b>按「＋ 新企劃」開始</div>`}</div></section>`;
+      <div class="row" style="margin-top:8px;font-size:12px"><span class="bar"><i style="width:${tot ? done / tot * 100 : 0}%"></i></span><span class="muted">鏡頭 ${done}/${tot}</span></div></button>`; }).join("") : `<div class="card empty"><b>還沒有企劃</b>按右下角的＋開始</div>`}</div></section>`;
 }
 function projectHTML() {
   const p = DATA.projects[view.pid], di = Math.min(view.day, p.days.length - 1), d = p.days[di];
@@ -295,22 +296,38 @@ function placeHTML() {
 }
 function blocksHTML() {
   const B = blocks();
-  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>
-  ${wbNav("scn")}
-  <p class="wbq">分鏡｜每個地方拍什麼？</p>
-  <p class="hint">新增地點時選一塊，拍攝清單就自動帶出。在地點裡改過鏡頭，可以按「存成這塊積木的預設」。</p>
+  return `<p class="hint">新增地點時選一塊，拍攝清單就自動帶出。在地點裡改過鏡頭，可以按「存成這塊積木的預設」。</p>
   <section class="section"><div class="card">${Object.entries(B).map(([k, b]) => `<details class="blk"><summary class="row" style="cursor:pointer"><span class="chip type ${b.cls}">${esc(b.name)}</span><span class="muted" style="font-size:13px">${b.shots.length} 個鏡頭</span></summary>
     <ol style="margin:8px 0 0;padding-left:22px;font-size:14px">${b.shots.map(s => `<li>${esc(s.n)}${s.h ? `<span class="muted">｜${esc(s.h)}</span>` : ""}</li>`).join("") || "<li class='muted'>自由拍</li>"}</ol>
     <p class="hint" style="margin-top:6px">紀錄欄位：${b.fields.map(f => esc(f.l)).join("、")}</p></details>`).join("")}</div></section>`;
 }
 function settingsHTML() {
-  return `<div class="top"><button class="icon-btn" data-go="src" aria-label="返回">‹</button><h1 style="font-size:20px">設定</h1></div>
-  <section class="section"><h2>OneDrive</h2><div class="card stack">
+  return `<section class="section"><h2>OneDrive</h2><div class="card stack">
     ${signedIn() ? `<div class="banner ok"><span>已登入，影片會傳到 OneDrive／應用程式／Origina／WonderMedia</span></div><button class="btn" data-act="sync">立即同步</button><button class="btn danger" data-act="logout">登出</button>`
       : `<p class="hint" style="margin:0">登入後：手機拍的影片會自動傳到 OneDrive，電腦同步下來，Claude 就能直接剪。沒登入也能用，影片先存在這支手機。</p><button class="btn primary" data-act="login">登入 OneDrive</button>`}
   </div></section>
   <section class="section"><h2>Claude 對話</h2><div class="card stack"><p class="hint" style="margin:0">按「幫我剪」會複製句子並打開這個對話，貼上就送出。換了對話就把新的網址貼進來。</p><input id="claudeurl" value="${esc(claudeURL())}" aria-label="WonderMedia 對話網址"></div></section>
   <section class="section"><h2>備份</h2><div class="card stack"><button class="btn" data-act="export">匯出全部紀錄（JSON）</button><p class="hint" style="margin:0">影片不在備份檔裡，影片在 OneDrive。</p></div></section>`;
+}
+
+const WBOPEN = new Set(ls.get("wbopen", []));
+document.addEventListener("toggle", e => { const d = e.target; if (!d.dataset || !d.dataset.sec) return; d.open ? WBOPEN.add(d.dataset.sec) : WBOPEN.delete(d.dataset.sec); ls.set("wbopen", [...WBOPEN]); }, true);
+function wbAllHTML() {
+  const W = wb(), B = blocks();
+  const sec = (k, q, n, body) => `<details class="wbsec" data-sec="${k}" ${WBOPEN.has(k) ? "open" : ""}><summary><span>${q}</span><small class="mono muted">${n}</small></summary>${body}</details>`;
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>${wbNav("blk")}
+  <p class="hint" style="margin-top:10px">一支片由上到下這樣組起來：先選風格 → 排劇本 → 每個地點照分鏡拍 → 照剪法剪。點標題打開。</p>
+  ${sec("sty", "風格｜這支片是什麼味道？", W.styles.length + " 種", wbHTML("sty"))}
+  ${sec("tpl", "劇本｜整支怎麼排？", W.templates.length + " 套", wbHTML("tpl"))}
+  ${sec("scn", "分鏡｜每個地方拍什麼？", Object.keys(B).length + " 塊", blocksHTML())}
+  ${sec("cut", "剪法｜怎麼剪、誰來剪？", W.steps.length + " 步", wbHTML("cut"))}`;
+}
+function meHTML() {
+  const A = DATA.docs.accounts || {};
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">我</h1></div>
+  <section class="section"><h2>我的平台</h2><div class="card stack">${PLATFORMS.map(pf => `<div class="field" style="margin:0"><label for="acct-${pf}">${pf}</label><input id="acct-${pf}" data-acct="${pf}" value="${esc(A[pf] || "")}" placeholder="帳號或網址"></div>`).join("")}</div></section>
+  <section class="section"><h2>道具櫃</h2>${wbHTML("kit")}</section>
+  ${settingsHTML()}`;
 }
 
 /* ---------- sheet ---------- */
@@ -559,18 +576,12 @@ function srcHTML() {
   const recs = Object.entries(DATA.stream).map(([id, r]) => ({ id, ...r })).sort((a, b) => b.ts - a.ts);
   const today = todayISO(), todays = recs.filter(r => dateOf(r.ts) === today);
   const items = riverItems().filter(x => x.type === "rec").slice(0, 20);
-  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">源頭</h1><button class="icon-btn" data-go="set" aria-label="設定">⚙︎</button></div>
-  <p class="hint">想到什麼先丟進來，之後在河流裡整理、挑選。</p>
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">源頭</h1></div>
+  <p class="hint">想到什麼先丟進來：按右下角的＋，文字、語音、照片、雙鏡頭都在裡面。之後在河流裡整理、挑選。</p>
   ${syncBanner()}
-  <section class="section"><div class="capgrid">
-    <button class="cap" data-act="cap-text"><b>✍️</b>文字</button>
-    <button class="cap" data-act="cap-voice"><b>🎙️</b>語音</button>
-    <label class="cap"><b>📷</b>照片<input type="file" accept="image/*,video/*" multiple class="vh" id="capphoto"></label>
-    <button class="cap" data-dual="src"><b>📸</b>雙鏡頭</button>
-    <a class="cap coach" href="${COACH}"><b>🧑‍🎨</b>拍照教練</a>
-  </div></section>
+  <a class="card coachrow" href="${COACH}"><b>🧑‍🎨</b><span><b>拍照教練</b><small>不知道怎麼拍時，跟著它擺角度</small></span><i>›</i></a>
   <section class="section"><header><h2>剛流進來的</h2><span class="muted mono" style="font-size:13px">今天 ${todays.length} 則</span></header>
-    ${items.length ? `<div class="stack">${items.map(itemHTML).join("")}</div><button class="btn ghost wide" data-go="river">看整條河流 ›</button>` : `<div class="card empty"><b>源頭還是空的</b>按上面的按鈕，或右下角的 ＋ 記第一則</div>`}</section>`;
+    ${items.length ? `<div class="stack">${items.map(itemHTML).join("")}</div><button class="btn ghost wide" data-go="river">看整條河流 ›</button>` : `<div class="card empty"><b>源頭還是空的</b>按右下角的 ＋ 記第一則</div>`}</section>`;
 }
 function itemHTML(x) {
   const tags = (x.o.tags || []).map(g => `<span class="chip">#${esc(g)}</span>`).join("");
@@ -666,14 +677,14 @@ function seaHTML() {
   const ps = Object.entries(DATA.posts).map(([id, p]) => ({ id, ...p })).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const sum = PLATFORMS.concat("其他").map(pf => { const xs = ps.filter(p => (PLATFORMS.includes(p.platform) ? p.platform : "其他") === pf); return { pf, n: xs.length, v: xs.reduce((a, p) => a + (Number(p.views) || 0), 0), l: xs.reduce((a, p) => a + (Number(p.likes) || 0), 0) }; }).filter(x => x.n || PLATFORMS.includes(x.pf));
   const num = v => v >= 10000 ? (v / 10000).toFixed(v >= 100000 ? 0 : 1) + " 萬" : String(v);
-  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">出海口</h1><button class="btn sm primary" data-act="newpost">＋ 記一次發布</button></div>
+  return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">出海口</h1></div>
   <p class="hint">剪好的片從這裡出海。記下發在哪、連結和成效，之後回頭看哪種內容最有反應。</p>
   <section class="section"><div class="seagrid">${sum.map(x => `<div class="card seac"><div class="pf">${esc(x.pf)}</div><div class="mono big">${x.n}</div><div class="muted" style="font-size:12px">支・觀看 ${num(x.v)}・讚 ${num(x.l)}</div></div>`).join("")}</div></section>
   ${styleStats(ps, num)}
   <section class="section"><header><h2>發布紀錄</h2></header>
   ${ps.length ? `<div class="stack">${ps.map(p => `<button class="card post" data-post="${p.id}"><div class="row" style="justify-content:space-between"><span class="chip">${esc(p.platform)}</span><span class="mono muted" style="font-size:12px">${esc(md(p.date))}</span></div>
     <div class="t" style="margin-top:6px">${esc(p.title)}</div><div class="row muted mono" style="font-size:12px;margin-top:4px"><span>👀 ${num(Number(p.views) || 0)}</span><span>♥ ${num(Number(p.likes) || 0)}</span><span>💬 ${num(Number(p.comments) || 0)}</span>${p.saves ? `<span>🔖 ${num(Number(p.saves))}</span>` : ""}</div>${p.note ? `<p class="hint" style="margin-top:6px">${esc(p.note)}</p>` : ""}</button>`).join("")}</div>`
-    : `<div class="card empty"><b>還沒有出海的片</b>發布之後按「＋ 記一次發布」</div>`}</section>`;
+    : `<div class="card empty"><b>還沒有出海的片</b>發布之後按右下角的＋記一筆</div>`}</section>`;
 }
 function editPost(id) {
   const p = id ? DATA.posts[id] : { platform: "IG", date: todayISO() };
@@ -693,7 +704,7 @@ function editPost(id) {
 const WB_DEFAULT = {"styles": [{"n": "實用攻略型", "core": "景點懶人包、路線地圖、避坑與花費分析", "hw": "遊覽攻略、拍照機位", "m": "Vlog 自動編排＋資訊字卡"}, {"n": "氛圍感美學／微電影", "core": "高質感畫面、微電影鏡頭感，搭配口播或旁白與音樂", "hw": "微電影氛圍", "m": "音樂卡點＋調色（你主導）"}, {"n": "第一人稱沉浸（POV）", "core": "Ray-Ban 視角、第一人稱鏡頭、原聲與步伐節奏", "hw": "", "m": "Vlog 自動編排，原聲為主、少字"}, {"n": "主觀評測／說書", "core": "面對鏡頭聊天、講旅行荒謬故事與主觀評分", "hw": "心得感想", "m": "口播剪輯（去氣口、停頓）"}, {"n": "預算／CP 值極致", "core": "平價替代景點、CP 值實測", "hw": "遊覽攻略", "m": "口播剪輯＋價格字卡"}, {"n": "靈性／療癒哲理", "core": "慢節奏、與內心對話的哲理金句與冥想感", "hw": "", "m": "慢節奏旁白＋氛圍配樂"}, {"n": "特殊主題／文化挖掘", "core": "專攻古建築、藝術展覽等深層文化", "hw": "歷史人文", "m": "知識講解（動態字幕、圖解）"}, {"n": "頂級開箱／飯店設備控", "core": "奢華飯店開箱、開箱高級設備", "hw": "", "m": "開箱結構＋口播"}, {"n": "互動問答／隨機冒險", "core": "讓粉絲投票決定行程、隨機抽籤冒險", "hw": "", "m": "口播剪輯＋投票字卡"}], "templates": [{"n": "口播／觀點", "flow": ["一句話開場 Hook", "為什麼想講", "三個重點", "收尾＋邀請留言"], "sty": "評測、療癒", "blk": ["free"]}, {"n": "旅行 Vlog", "flow": ["開場 Hook", "每天", "每個地點", "結尾心得"], "sty": "攻略、氛圍、POV", "blk": ["move", "play", "food", "stay"]}, {"n": "生活 Vlog", "flow": ["開場", "今天的幾件事", "碎碎念收尾"], "sty": "POV、療癒", "blk": ["free", "cook", "food"]}, {"n": "探店／美食", "flow": ["一句話評價先講", "店家", "餐點", "總評"], "sty": "評測、CP 值", "blk": ["food", "night"]}, {"n": "開箱／好物", "flow": ["為什麼買", "外觀", "實測", "優缺點"], "sty": "開箱、評測", "blk": ["free"]}, {"n": "穿搭", "flow": ["整體", "單品細節", "場合搭配"], "sty": "氛圍", "blk": ["wear"]}, {"n": "街頭表演", "flow": ["現場氛圍", "表演片段", "觀眾反應", "幕後"], "sty": "氛圍、POV", "blk": ["music"]}, {"n": "合唱團", "flow": ["練習花絮", "演出", "團員訪談"], "sty": "氛圍", "blk": ["music"]}, {"n": "Podcast", "flow": ["本集主題", "錄音", "精華切片 3 到 5 段"], "sty": "評測、療癒", "blk": ["free"]}], "steps": [{"n": "素材整理", "who": "Claude", "d": "依拍攝清單分類、挑出能用的片段"}, {"n": "腳本與標題", "who": "Claude 草擬，你定稿", "d": "Google Map 地點、吸睛標題"}, {"n": "粗剪＋地標字卡", "who": "Claude", "d": "排時間線、切掉空白和重複"}, {"n": "片頭片尾", "who": "Claude", "d": "套你的固定模板"}, {"n": "音樂＋卡點", "who": "Claude", "d": "從道具櫃挑配樂，剪接點對拍子"}, {"n": "調色", "who": "你", "d": "亮度、對比、濾鏡，套用到全部"}, {"n": "特效、貼圖、音效", "who": "Claude 先放，你微調", "d": "從道具櫃拿"}, {"n": "封面", "who": "你", "d": "Canva，一個內建兩張"}, {"n": "文字字幕", "who": "Claude 初稿，你修", "d": "文字框、字幕字體照道具櫃"}, {"n": "音樂淡出、透明度", "who": "Claude", "d": "收尾漸弱"}, {"n": "Shorts 切片", "who": "Claude", "d": "從長片切出直式短版，套上新模板"}], "methods": [{"n": "素材 → 剪映草稿", "d": "照劇本排好、放好字幕貼圖配樂，存成剪映草稿，你最後修", "fit": "全部賽道", "st": "在用"}, {"n": "口播剪輯", "d": "去氣口、停頓、重複句，自動上字幕", "fit": "評測、CP 值、問答", "st": "做得到"}, {"n": "Vlog 自動編排", "d": "隨手拍丟進來，看畫面和聲音排成故事、配音樂", "fit": "攻略、POV、生活", "st": "做得到"}, {"n": "爆款複刻／一鍵套範本", "d": "拆解一支爆款的鏡頭節奏，用你的素材照著排", "fit": "懶人套範本", "st": "要一支參考片"}, {"n": "知識動畫", "d": "動態字幕、圖解、地圖動畫", "fit": "文化挖掘、攻略", "st": "還沒試過"}]};
 function wb() { const c = DATA.docs.wb || {}; const out = {}; for (const k in WB_DEFAULT) out[k] = c[k] || WB_DEFAULT[k]; return out; }
 function saveWB(k, list) { DATA.docs.wb = { ...(DATA.docs.wb || {}), [k]: list, _u: Date.now() }; DIRTY = true; writeCache(); scheduleSync(); }
-const WBTABS = [["plan", "企劃", "home"], ["sty", "風格", "wb/sty"], ["tpl", "劇本", "wb/tpl"], ["scn", "分鏡", "blocks"], ["kit", "道具", "wb/kit"], ["cut", "剪法", "wb/cut"]];
+const WBTABS = [["plan", "企劃", "home"], ["blk", "積木", "wb/all"]];
 function wbNav(cur) { return `<nav class="wbnav">${WBTABS.map(([k, l, h]) => `<button data-go="${h}" aria-current="${k === cur}">${l}</button>`).join("")}</nav>`; }
 const tplOf = p => p && p.tpl ? wb().templates.find(x => x.n === p.tpl) : null;
 const styleOf = p => p && p.style ? wb().styles.find(x => x.n === p.style) : null;
@@ -720,7 +731,7 @@ let KIT = null;
 async function loadKit() { if (KIT) return KIT; try { KIT = await (await fetch("kit/kit.json")).json(); } catch (e) { KIT = { stickers: [], frames: [], sfx: [], music: [] }; } return KIT; }
 const KF = { tab: "stickers", cat: "全部" };
 function wbHTML(sub) {
-  const W = wb(), head = `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">工作台</h1></div>${wbNav(sub)}`;
+  const W = wb(), head = "";
   if (sub === "kit") {
     if (!KIT) { loadKit().then(() => render()); return head + `<p class="hint" style="margin-top:12px">道具櫃載入中…</p>`; }
     const cats = ["全部", ...new Set(KIT.stickers.map(x => x.cat))];
@@ -731,7 +742,7 @@ function wbHTML(sub) {
       body = (KF.tab === "stickers" ? `<div class="rfilters">${cats.map(c => `<button data-kcat="${esc(c)}" aria-pressed="${KF.cat === c}">${esc(c)}</button>`).join("")}</div>` : "") +
         `<div class="kitgrid ${KF.tab}">${xs.map(x => `<div class="kit"><div class="kpic"><img src="${x.img}" alt="${esc(x.n)}" loading="lazy"></div><b>${esc(x.n)}</b>${x.use ? `<span class="muted">${esc(x.use)}</span>` : ""}${x.font ? `<span class="chip">${esc(x.font)}</span>` : ""}</div>`).join("")}</div>`;
     } else body = `<div class="sndgrid">${KIT[KF.tab].map(x => `<button class="snd" data-snd="${x.src}"><span class="dot">▶</span>${esc(x.n)}</button>`).join("")}</div>`;
-    return head + `<p class="wbq">道具｜長什麼樣子？</p><p class="hint">Claude 剪片時先從這裡拿。要增減素材，直接在 WonderMedia 對話裡跟 Claude 說，例如「素材庫加：哭哭的貼圖」。</p>
+    return head + `<p class="hint">Claude 剪片時先從這裡拿。要增減素材，直接在 WonderMedia 對話裡跟 Claude 說，例如「素材庫加：哭哭的貼圖」。</p>
       <div class="segs">${tabs.map(([k, l]) => `<button data-ktab="${k}" aria-pressed="${KF.tab === k}">${l} ${KIT[k].length}</button>`).join("")}</div>${body}
       <p class="hint" style="margin-top:12px">字體分工：字幕 辰宇落雁體｜標題 源樣明體｜說話 粉圓｜心裡話 清松手寫｜大聲 漫黑</p>`;
   }
@@ -740,7 +751,7 @@ function wbHTML(sub) {
   const cards = (def, lst, kind) => `<div class="stack">${lst.map((it, i) => `<button class="card wbcard" data-wbedit="${kind}:${i}"><div class="wbt"><span class="mono muted">${kind === "steps" ? i : i + 1}.</span> ${esc(it.n)}${kind === "steps" ? `<span class="chip ${/^你/.test(it.who) ? "you" : "cl"}">${esc(it.who)}</span>` : ""}${kind === "methods" ? `<span class="chip ${/在用|做得到/.test(it.st) ? "ok" : ""}">${esc(it.st)}</span>` : ""}</div>
     ${def.fields.slice(1).filter(([k]) => !(kind === "steps" && k === "who") && !(kind === "methods" && k === "st")).map(([k, l]) => k === "flow" ? `<div class="flow">${(it.flow || []).map(x => `<span>${esc(x)}</span>`).join("<i>→</i>")}</div>` : `<div class="wbf"><span>${esc(l)}</span>${esc(cell(it, k))}</div>`).join("")}</button>`).join("")}
     <button class="btn ghost wide" data-wbadd="${kind}">＋ 新增一筆</button></div>`;
-  let html = head + `<p class="wbq">${esc(d.q)}</p><p class="hint">${esc(d.hint)}點一筆就能改。</p>` + cards(d, list, d.key);
+  let html = head + `<p class="hint">${esc(d.hint)}點一筆就能改。</p>` + cards(d, list, d.key);
   if (sub === "cut") html += `<section class="section"><h2>AI 剪法</h2><p class="hint">選了賽道，就等於選好了預設剪法。</p>${cards(WBDEF.meth, W.methods, "methods")}</section>`;
   if (sub === "sty") html += `<p class="hint" style="margin-top:10px">「懶人一鍵套範本」是一種剪法，不是風格，放在剪法頁。</p>`;
   return html;
@@ -1048,6 +1059,7 @@ document.addEventListener("change", async e => {
     } catch (er) { toast("加不進去：" + (er && er.message || "請從主畫面的 WonderMedia 開啟")); return; }
     s.done = true; touch(view.pid); render(); toast(signedIn() ? "已加入，上傳中" : "已存在手機，登入 OneDrive 後上傳"); uploadPending(); return;
   }
+  if (t.dataset && t.dataset.acct) { DATA.docs.accounts = { ...(DATA.docs.accounts || {}), [t.dataset.acct]: t.value.trim(), _u: Date.now() }; DIRTY = true; writeCache(); scheduleSync(); return toast("已儲存"); }
   if (t.id === "claudeurl") { const v = t.value.trim(); ls.set("claude-url", /^https:\/\/claude\.ai\//.test(v) ? v : ""); toast(/^https:\/\/claude\.ai\//.test(v) ? "已儲存對話網址" : "要是 claude.ai 開頭的網址，已改回預設"); return; }
   if (t.dataset.f && t.tagName === "INPUT") { curPlace().info[t.dataset.f] = t.value.trim(); touch(view.pid); }
 });

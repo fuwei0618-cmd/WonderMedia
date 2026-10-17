@@ -387,3 +387,10 @@ button.addclip{background:transparent;font-family:inherit}
 /* Origina 操作規則：同步雲朵在右下 */
 .wmcloud{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:15;display:flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:999px;background:rgba(43,39,36,.82);color:#F4EFE7;font:600 12px/1 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.18);cursor:pointer}
 .wmcloud svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}.wmcloud i{width:7px;height:7px;border-radius:50%;background:#8FD18F}.wmcloud.busy i{background:#F2C14E}.wmcloud.err i{background:#E8806B}.wmcloud.quiet span{display:none}
+
+.coachrow{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;margin-top:12px}.coachrow>b{font-size:26px}.coachrow span{display:grid;flex:1}.coachrow small{color:var(--muted);font-size:12px}.coachrow i{font-style:normal;color:var(--muted);font-size:20px}
+.wbsec{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-top:12px;padding:0 14px}
+.wbsec>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 0;cursor:pointer;font-weight:700}
+.wbsec>summary::-webkit-details-marker{display:none}.wbsec>summary::after{content:"›";color:var(--muted);transition:transform .2s}.wbsec[open]>summary::after{transform:rotate(90deg)}
+.wbsec>summary small{margin-left:auto;font-weight:400;font-size:12px}
+.wbsec[open]{padding-bottom:14px}
