@@ -115,7 +115,18 @@ function logout() { localStorage.removeItem("lucky-token"); location.assign("htt
 
 let syncChain = Promise.resolve(), syncTimer = null, SYNC = "local";
 function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(sync, 900); }
-function sync() { syncChain = syncChain.then(syncOnce).catch(() => {}); return syncChain; }
+function sync() { syncChain = syncChain.then(syncOnce).catch(() => {}).then(() => renderCloud()); return syncChain; }
+/* Origina 操作規則：同步雲朵在右下 */
+function renderCloud() {
+  let c = document.getElementById("wmCloud");
+  if (!c) { c = document.createElement("button"); c.id = "wmCloud"; c.type = "button"; c.className = "wmcloud"; c.setAttribute("aria-label", "OneDrive 同步");
+    c.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 18h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.3 3.3 0 0 0 7 18z"/></svg><i></i><span></span>';
+    c.onclick = async () => { if (!signedIn()) return login(); await sync(); toast(SYNC === "ok" ? "已同步" : "同步沒成功"); };
+    document.body.appendChild(c); }
+  const out = !signedIn() || SYNC === "expired", st = out || SYNC === "offline" ? "err" : DIRTY ? "busy" : "";
+  c.className = "wmcloud " + st + (st ? "" : " quiet");
+  c.querySelector("span").textContent = out ? "登入 OneDrive" : SYNC === "offline" ? "還沒同步" : DIRTY ? "同步中…" : "已同步";
+}
 async function syncOnce() {
   if (!signedIn()) { SYNC = "local"; return; }
   try {
@@ -180,6 +191,7 @@ function syncBanner() {
   return "";
 }
 function render() {
+  try { renderCloud(); } catch (e) {}
   if (!DATA) return;
   const app = $("#app");
   if (view.tab === "src") app.innerHTML = srcHTML();

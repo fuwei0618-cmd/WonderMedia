@@ -383,3 +383,7 @@ button.addclip{background:transparent;font-family:inherit}
 .campm .pmtext{font-size:26px;padding:6vh 20px 0}
 .campmbtn{position:absolute;right:14px;top:calc(120px + 34vh + env(safe-area-inset-top,0px));z-index:4}
 .campmbtn.on{background:#F2A900!important;color:#1b1b1b}
+
+/* Origina 操作規則：同步雲朵在右下 */
+.wmcloud{position:fixed;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:50;display:flex;align-items:center;gap:6px;height:34px;padding:0 10px;border:0;border-radius:999px;background:rgba(43,39,36,.82);color:#F4EFE7;font:600 12px/1 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.18);cursor:pointer}
+.wmcloud svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8}.wmcloud i{width:7px;height:7px;border-radius:50%;background:#8FD18F}.wmcloud.busy i{background:#F2C14E}.wmcloud.err i{background:#E8806B}.wmcloud.quiet span{display:none}
