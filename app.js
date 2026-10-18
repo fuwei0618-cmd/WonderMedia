@@ -322,9 +322,13 @@ function wbAllHTML() {
   ${sec("scn", "分鏡｜每個地方拍什麼？", Object.keys(B).length + " 塊", blocksHTML())}
   ${sec("cut", "剪法｜怎麼剪、誰來剪？", W.steps.length + " 步", wbHTML("cut"))}`;
 }
+const WHY_TBL=[["一直在", "做一次之後，還會一直被看見嗎", "✗ 散場就沒了", "✗ 唱完就沒了", "✓ 一直在網路上"], ["不用到場", "要本人在場嗎", "要", "要", "不用"], ["被找到", "是我去找人，還是人來找我", "我去找", "剛好路過的人", "鐵粉自己找上門"], ["節奏自己定", "什麼時候做、做多少，誰決定", "別人", "主辦方", "我"], ["本來就在做", "需要另外花力氣嗎", "要", "要準備", "不太用，生活本來就在記錄"], ["會累積", "做越多，會越來越輕鬆嗎", "✗", "慢慢", "✓ 作品和名聲一起疊上去"], ["能變現", "能帶來收入嗎", "間接", "偶爾", "✓ 也是接案的作品集"]];
 function meHTML() {
   const A = DATA.docs.accounts || {};
   return `<div class="top"><h1 style="font-family:var(--f-display);font-size:24px">我</h1></div>
+  <section class="section"><div class="card why"><div class="eyebrow">為什麼做自媒體</div><p class="whyline">自媒體是我不用在場，也能一直被找到的地方。</p>
+    <details class="whyroot"><summary>根本原因 ▾</summary><div class="whytbl"><table><thead><tr><th>關鍵字<br><small>比的是：被看見的方式</small></th><th>社交・應酬</th><th>現場表演・比賽</th><th>自媒體</th></tr></thead><tbody>${WHY_TBL.map(r=>`<tr><td><b>${r[0]}</b><br><small>${r[1]}</small></td><td>${r[2]}</td><td>${r[3]}</td><td><b>${r[4]}</b></td></tr>`).join("")}</tbody></table></div>
+    <p class="hint" style="margin:8px 0 0">第一列「一直在」是原因：做一次，就一直被看見。下面六個都是它帶來的結果。跟音樂放在一起看：音樂是「發出聲音」，自媒體是「讓聲音留下來」。</p></details></div></section>
   <section class="section"><h2>我的平台</h2><div class="card stack">${PLATFORMS.map(pf => `<div class="field" style="margin:0"><label for="acct-${pf}">${pf}</label><input id="acct-${pf}" data-acct="${pf}" value="${esc(A[pf] || "")}" placeholder="帳號或網址"></div>`).join("")}</div></section>
   <section class="section"><h2>道具櫃</h2>${wbHTML("kit")}</section>
   ${settingsHTML()}`;

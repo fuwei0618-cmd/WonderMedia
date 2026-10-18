@@ -394,3 +394,8 @@ button.addclip{background:transparent;font-family:inherit}
 .wbsec>summary::-webkit-details-marker{display:none}.wbsec>summary::after{content:"›";color:var(--muted);transition:transform .2s}.wbsec[open]>summary::after{transform:rotate(90deg)}
 .wbsec>summary small{margin-left:auto;font-weight:400;font-size:12px}
 .wbsec[open]{padding-bottom:14px}
+
+.card.why .eyebrow{font-size:12px;color:var(--muted);letter-spacing:.05em}
+.whyline{font-family:var(--f-display);font-size:19px;line-height:1.6;margin:6px 0 4px}
+.whyroot summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none}.whyroot summary::-webkit-details-marker{display:none}
+.whytbl{overflow-x:auto;margin-top:8px}.whytbl table{width:100%;border-collapse:collapse;font-size:12.5px}.whytbl th,.whytbl td{padding:8px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:top}.whytbl th{font-weight:500;color:var(--muted);border-top:0}.whytbl small{color:var(--muted);font-size:11.5px}
